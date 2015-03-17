@@ -37,7 +37,7 @@ end;
 
 var
   A: TIntegerDynArray;
-  FoundIndex: Integer;
+  FoundIndex: PtrInt;
   ForCompareObj: TForCompare;
 begin
   WriteLn('Working with TArray - one-dimensional integer array');

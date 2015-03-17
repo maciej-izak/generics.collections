@@ -73,7 +73,7 @@ var
   // Declare TObjectList as storage for TPlayer
   PlayersList: TObjectList<TPlayer>;
   Player: TPlayer;
-  FoundIndex: Integer;
+  FoundIndex: PtrInt;
 begin
   WriteLn('Working with TObjectList - football manager');
   WriteLn;
