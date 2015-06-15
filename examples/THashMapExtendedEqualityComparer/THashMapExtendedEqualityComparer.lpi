@@ -35,7 +35,6 @@
       <Unit0>
         <Filename Value="THashMapExtendedEqualityComparer.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="THashMapExtendedEqualityComparer"/>
       </Unit0>
     </Units>
   </ProjectOptions>
@@ -47,15 +46,9 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="..\.."/>
+      <OtherUnitFiles Value="..\..\src"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
-    <Other>
-      <CompilerMessages>
-        <MsgFileName Value=""/>
-      </CompilerMessages>
-      <CompilerPath Value="$(CompPath)"/>
-    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions Count="3">
