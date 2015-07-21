@@ -139,7 +139,7 @@ type
     class function ShortString2(constref ALeft, ARight: ShortString2): Integer;
     class function ShortString3(constref ALeft, ARight: ShortString3): Integer;
     class function &String(constref ALeft, ARight: string): Integer;
-    class function ShortString(constref ALeft, ARight: OpenString): Integer;
+    class function ShortString(constref ALeft, ARight: ShortString): Integer;
     class function AnsiString(constref ALeft, ARight: AnsiString): Integer;
     class function WideString(constref ALeft, ARight: WideString): Integer;
     class function UnicodeString(constref ALeft, ARight: UnicodeString): Integer;
@@ -178,7 +178,7 @@ type
     class function ShortString2(constref ALeft, ARight: ShortString2): Boolean;
     class function ShortString3(constref ALeft, ARight: ShortString3): Boolean;
     class function &String(constref ALeft, ARight: String): Boolean;
-    class function ShortString(constref ALeft, ARight: OpenString): Boolean;
+    class function ShortString(constref ALeft, ARight: ShortString): Boolean;
     class function AnsiString(constref ALeft, ARight: AnsiString): Boolean;
     class function WideString(constref ALeft, ARight: WideString): Boolean;
     class function UnicodeString(constref ALeft, ARight: UnicodeString): Boolean;
@@ -448,7 +448,7 @@ type
     class function ShortString1 (constref AValue: ShortString1 ): UInt32; overload;
     class function ShortString2 (constref AValue: ShortString2 ): UInt32; overload;
     class function ShortString3 (constref AValue: ShortString3 ): UInt32; overload;
-    class function ShortString  (constref AValue: OpenString   ): UInt32; overload;
+    class function ShortString  (constref AValue: ShortString   ): UInt32; overload;
     class function AnsiString   (constref AValue: AnsiString   ): UInt32; overload;
     class function WideString   (constref AValue: WideString   ): UInt32; overload;
     class function UnicodeString(constref AValue: UnicodeString): UInt32; overload;
@@ -501,7 +501,7 @@ type
     class procedure ShortString1 (constref AValue: ShortString1 ; AHashList: PUInt32); overload;
     class procedure ShortString2 (constref AValue: ShortString2 ; AHashList: PUInt32); overload;
     class procedure ShortString3 (constref AValue: ShortString3 ; AHashList: PUInt32); overload;
-    class procedure ShortString  (constref AValue: OpenString   ; AHashList: PUInt32); overload;
+    class procedure ShortString  (constref AValue: ShortString   ; AHashList: PUInt32); overload;
     class procedure AnsiString   (constref AValue: AnsiString   ; AHashList: PUInt32); overload;
     class procedure WideString   (constref AValue: WideString   ; AHashList: PUInt32); overload;
     class procedure UnicodeString(constref AValue: UnicodeString; AHashList: PUInt32); overload;
@@ -1352,7 +1352,7 @@ begin
     Exit(0);
 end;
 
-class function TCompare.ShortString(constref ALeft, ARight: OpenString): Integer;
+class function TCompare.ShortString(constref ALeft, ARight: ShortString): Integer;
 begin
   if ALeft > ARight then
     Exit(1)
@@ -1601,7 +1601,7 @@ begin
   Result := ALeft = ARight;
 end;
 
-class function TEquals.ShortString(constref ALeft, ARight: OpenString): Boolean;
+class function TEquals.ShortString(constref ALeft, ARight: ShortString): Boolean;
 begin
   Result := ALeft = ARight;
 end;
@@ -1933,7 +1933,7 @@ begin
   Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
 end;
 
-class function THashCode.ShortString(constref AValue: OpenString): UInt32;
+class function THashCode.ShortString(constref AValue: ShortString): UInt32;
 begin
   Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
 end;
@@ -2150,7 +2150,7 @@ begin
   EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
 end;
 
-class procedure TExtendedHashCode.ShortString(constref AValue: OpenString; AHashList: PUInt32);
+class procedure TExtendedHashCode.ShortString(constref AValue: ShortString; AHashList: PUInt32);
 begin
   EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
 end;
