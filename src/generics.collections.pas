@@ -316,7 +316,7 @@ type
   public
     constructor Create(AOwnsObjects: Boolean = True); overload;
     constructor Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean = True); overload;
-    procedure Pop;
+    function Pop: T;
     property OwnsObjects: Boolean read FObjectsOwner write FObjectsOwner;
   end;
 
@@ -1253,9 +1253,9 @@ begin
   FObjectsOwner := AOwnsObjects;
 end;
 
-procedure TObjectStack<T>.Pop;
+function TObjectStack<T>.Pop: T;
 begin
-  inherited Pop;
+  Result := inherited Pop;
 end;
 
 {$I inc\generics.dictionaries.inc}
