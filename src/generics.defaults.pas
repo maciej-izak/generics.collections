@@ -29,7 +29,7 @@ unit Generics.Defaults;
 interface
 
 uses
-  Classes, SysUtils, Generics.Hashes, TypInfo, Variants, Math, Generics.Strings, Generics.Helpers;
+  Classes, SysUtils, Contnrs, Generics.Hashes, TypInfo, Variants, Math, Generics.Strings, Generics.Helpers;
 
 type
   IComparer<T> = interface
@@ -253,7 +253,9 @@ type
 
     TSelectFunc = function(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 
-  private
+  private class var
+    ComparerFactory: TObjectList;
+
     class function CreateInterface(AVMT: Pointer; ASize: SizeInt): PSpoofInterfacedTypeSizeObject; static;
 
     class function SelectIntegerComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
@@ -263,6 +265,7 @@ type
     class function SelectBinaryComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
     class function SelectDynArrayComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
 
+    class constructor Create;
     // important to call this code after auto release of this interface:
     // TOrdinalComparer<T, THashFactory>.FExtendedEqualityComparer
     class destructor Destroy;
@@ -1050,9 +1053,6 @@ function _LookupVtableInfoEx(AGInterface: TDefaultGenericInterface; ATypeInfo: P
 
 implementation
 
-var
-  ComparerFactory: array of TComparerFactory;
-
 { TComparer<T> }
 
 class function TComparer<T>.Default: IComparer<T>;
@@ -1763,17 +1763,17 @@ end;
 
 class function TComparerFactory.Register(const AComparerFactory: TComparerFactoryClass): Integer;
 begin
-  Result := Length(ComparerFactory);
-  SetLength(ComparerFactory, Result + 1);
-  ComparerFactory[Result] := AComparerFactory.Create;
+  Result := ComparerFactory.Add(AComparerFactory.Create);
+end;
+
+class constructor TComparerFactory.Create;
+begin
+  ComparerFactory := TObjectList.Create;
 end;
 
 class destructor TComparerFactory.Destroy;
-var
-  i: Integer;
 begin
-  for i := 0 to High(ComparerFactory) do
-    ComparerFactory[i].Free;
+  ComparerFactory.Free;
 end;
 
 { TComparerFactory.TInstance }
@@ -3350,7 +3350,7 @@ begin
           AFactory := TDelphiHashFactory;
 
         Exit(
-          ComparerFactory[AFactory.GetID].LookupEqualityComparer(ATypeInfo, ASize));
+          TComparerFactory(TComparerFactory.ComparerFactory[AFactory.GetID]).LookupEqualityComparer(ATypeInfo, ASize));
       end;
     giExtendedEqualityComparer:
       begin
@@ -3358,7 +3358,7 @@ begin
           AFactory := TDelphiDoubleHashFactory;
 
         Exit(
-          ComparerFactory[AFactory.GetID].LookupExtendedEqualityComparer(ATypeInfo, ASize));
+          TComparerFactory(TComparerFactory.ComparerFactory[AFactory.GetID]).LookupExtendedEqualityComparer(ATypeInfo, ASize));
       end;
   else
     System.Error(reRangeError);
