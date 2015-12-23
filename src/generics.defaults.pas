@@ -263,6 +263,9 @@ type
     class function SelectBinaryComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
     class function SelectDynArrayComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
 
+    // important to call this code after auto release of this interface:
+    // TOrdinalComparer<T, THashFactory>.FExtendedEqualityComparer
+    class destructor Destroy;
   private const
     // IComparer VMT
     Comparer_Int8_VMT  : TComparerVMT = (STD_RAW_INTERFACE_METHODS; Compare: @TCompare.Int8);
@@ -1765,6 +1768,14 @@ begin
   ComparerFactory[Result] := AComparerFactory.Create;
 end;
 
+class destructor TComparerFactory.Destroy;
+var
+  i: Integer;
+begin
+  for i := 0 to High(ComparerFactory) do
+    ComparerFactory[i].Free;
+end;
+
 { TComparerFactory.TInstance }
 
 class function TComparerFactory.TInstance.Create(ASelector: Boolean;
@@ -2783,7 +2794,7 @@ end;
 
 class function TExtendedEqualityComparer<T>.Default(
   AExtenedHashFactoryClass: TExtendedHashFactoryClass
-  ): IExtendedEqualityComparer;
+  ): IExtendedEqualityComparer<T>;
 begin
   Result := _LookupVtableInfoEx(giExtendedEqualityComparer, TypeInfo(T), SizeOf(T), AExtenedHashFactoryClass);
 end;
@@ -3355,15 +3366,5 @@ begin
   end;
 end;
 
-procedure FreeComparerFactory;
-var
-  i: Integer;
-begin
-  for i := 0 to High(ComparerFactory) do
-    ComparerFactory[i].Free;
-end;
-
-finalization
-  FreeComparerFactory;
 end.
 
