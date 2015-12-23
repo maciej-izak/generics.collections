@@ -189,13 +189,13 @@ type
     class function Pointer(constref ALeft, ARight: PtrUInt): Boolean;
   end;
 
-  TComparerFactoryClass = class of TComparerFactory;
-
+  THashServiceClass = class of THashService;
+  TExtendedHashServiceClass = class of TExtendedHashService;
   THashFactoryClass = class of THashFactory;
 
   TExtendedHashFactoryClass = class of TExtendedHashFactory;
 
-  { TComparerFactory }
+  { TComparerService }
 
 {$DEFINE STD_RAW_INTERFACE_METHODS :=
     QueryInterface: @TRawInterface.QueryInterface;
@@ -209,26 +209,125 @@ type
     _Release      : @TComTypeSizeInterface._Release
 }
 
-{$DEFINE STD_COM_INTERFACE_METHODS :=
-    QueryInterface: @QueryInterface;
-    _AddRef       : @AddRef;
-    _Release      : @Release
-}
-
   TGetHashListOptions = set of (ghloHashListAsInitData);
 
-  TComparerFactory = class abstract
-  protected
-    class function GetID: Integer; virtual; abstract; // any hash factory must have
-  private
-    function LookupEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; virtual; abstract;
-    function LookupExtendedEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; virtual; abstract;
+  THashFactory = class
+  private type
+    PPEqualityComparerVMT = ^PEqualityComparerVMT;
+    PEqualityComparerVMT = ^TEqualityComparerVMT;
+    TEqualityComparerVMT = packed record
+      QueryInterface: Pointer;
+      _AddRef: Pointer;
+      _Release: Pointer;
+      Equals: Pointer;
+      GetHashCode: Pointer;
+      __Reserved: Pointer; // initially or TExtendedEqualityComparerVMT compatibility
+                           // (important when ExtendedEqualityComparer is calling Binary method)
+      __ClassRef: THashFactoryClass; // hidden field in VMT. For class ref THashFactoryClass
+    end;
 
-    function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
-    function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
-    function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
-    function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
-    function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
+  private
+(***********************************************************************************************************************
+      Hashes
+(**********************************************************************************************************************)
+
+    class function Int8         (constref AValue: Int8         ): UInt32; overload;
+    class function Int16        (constref AValue: Int16        ): UInt32; overload;
+    class function Int32        (constref AValue: Int32        ): UInt32; overload;
+    class function Int64        (constref AValue: Int64        ): UInt32; overload;
+    class function UInt8        (constref AValue: UInt8        ): UInt32; overload;
+    class function UInt16       (constref AValue: UInt16       ): UInt32; overload;
+    class function UInt32       (constref AValue: UInt32       ): UInt32; overload;
+    class function UInt64       (constref AValue: UInt64       ): UInt32; overload;
+    class function Single       (constref AValue: Single       ): UInt32; overload;
+    class function Double       (constref AValue: Double       ): UInt32; overload;
+    class function Extended     (constref AValue: Extended     ): UInt32; overload;
+    class function Currency     (constref AValue: Currency     ): UInt32; overload;
+    class function Comp         (constref AValue: Comp         ): UInt32; overload;
+    // warning ! self as PSpoofInterfacedTypeSizeObject
+    class function Binary       (constref AValue               ): UInt32; overload;
+    // warning ! self as PSpoofInterfacedTypeSizeObject
+    class function DynArray     (constref AValue: Pointer      ): UInt32; overload;
+    class function &Class       (constref AValue: TObject      ): UInt32; overload;
+    class function ShortString1 (constref AValue: ShortString1 ): UInt32; overload;
+    class function ShortString2 (constref AValue: ShortString2 ): UInt32; overload;
+    class function ShortString3 (constref AValue: ShortString3 ): UInt32; overload;
+    class function ShortString  (constref AValue: ShortString   ): UInt32; overload;
+    class function AnsiString   (constref AValue: AnsiString   ): UInt32; overload;
+    class function WideString   (constref AValue: WideString   ): UInt32; overload;
+    class function UnicodeString(constref AValue: UnicodeString): UInt32; overload;
+    class function Method       (constref AValue: TMethod      ): UInt32; overload;
+    class function Variant      (constref AValue: PVariant     ): UInt32; overload;
+    class function Pointer      (constref AValue: Pointer      ): UInt32; overload;
+  public
+    const MAX_HASHLIST_COUNT = 1;
+    const HASH_FUNCTIONS_COUNT = 1;
+    const HASHLIST_COUNT_PER_FUNCTION: array[1..HASH_FUNCTIONS_COUNT] of Integer = (1);
+    const HASH_FUNCTIONS_MASK_SIZE = 1;
+
+    class function GetHashService: THashServiceClass; virtual; abstract;
+    class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; virtual; abstract; reintroduce;
+  end;
+
+  TExtendedHashFactory = class(THashFactory)
+  private type
+    PPExtendedEqualityComparerVMT = ^PExtendedEqualityComparerVMT;
+    PExtendedEqualityComparerVMT = ^TExtendedEqualityComparerVMT;
+    TExtendedEqualityComparerVMT = packed record
+      QueryInterface: Pointer;
+      _AddRef: Pointer;
+      _Release: Pointer;
+      Equals: Pointer;
+      GetHashCode: Pointer;
+      GetHashList: Pointer;
+      __ClassRef: TExtendedHashFactoryClass; // hidden field in VMT. For class ref THashFactoryClass
+    end;
+  private
+(***********************************************************************************************************************
+      Hashes 2
+(**********************************************************************************************************************)
+
+    class procedure Int8         (constref AValue: Int8         ; AHashList: PUInt32); overload;
+    class procedure Int16        (constref AValue: Int16        ; AHashList: PUInt32); overload;
+    class procedure Int32        (constref AValue: Int32        ; AHashList: PUInt32); overload;
+    class procedure Int64        (constref AValue: Int64        ; AHashList: PUInt32); overload;
+    class procedure UInt8        (constref AValue: UInt8        ; AHashList: PUInt32); overload;
+    class procedure UInt16       (constref AValue: UInt16       ; AHashList: PUInt32); overload;
+    class procedure UInt32       (constref AValue: UInt32       ; AHashList: PUInt32); overload;
+    class procedure UInt64       (constref AValue: UInt64       ; AHashList: PUInt32); overload;
+    class procedure Single       (constref AValue: Single       ; AHashList: PUInt32); overload;
+    class procedure Double       (constref AValue: Double       ; AHashList: PUInt32); overload;
+    class procedure Extended     (constref AValue: Extended     ; AHashList: PUInt32); overload;
+    class procedure Currency     (constref AValue: Currency     ; AHashList: PUInt32); overload;
+    class procedure Comp         (constref AValue: Comp         ; AHashList: PUInt32); overload;
+    // warning ! self as PSpoofInterfacedTypeSizeObject
+    class procedure Binary       (constref AValue               ; AHashList: PUInt32); overload;
+    // warning ! self as PSpoofInterfacedTypeSizeObject
+    class procedure DynArray     (constref AValue: Pointer      ; AHashList: PUInt32); overload;
+    class procedure &Class       (constref AValue: TObject      ; AHashList: PUInt32); overload;
+    class procedure ShortString1 (constref AValue: ShortString1 ; AHashList: PUInt32); overload;
+    class procedure ShortString2 (constref AValue: ShortString2 ; AHashList: PUInt32); overload;
+    class procedure ShortString3 (constref AValue: ShortString3 ; AHashList: PUInt32); overload;
+    class procedure ShortString  (constref AValue: ShortString   ; AHashList: PUInt32); overload;
+    class procedure AnsiString   (constref AValue: AnsiString   ; AHashList: PUInt32); overload;
+    class procedure WideString   (constref AValue: WideString   ; AHashList: PUInt32); overload;
+    class procedure UnicodeString(constref AValue: UnicodeString; AHashList: PUInt32); overload;
+    class procedure Method       (constref AValue: TMethod      ; AHashList: PUInt32); overload;
+    class procedure Variant      (constref AValue: PVariant     ; AHashList: PUInt32); overload;
+    class procedure Pointer      (constref AValue: Pointer      ; AHashList: PUInt32); overload;
+  public
+    class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); virtual; abstract;
+  end;
+
+  TComparerService = class abstract
+  private type
+    TSelectMethod = function(ATypeData: PTypeData; ASize: SizeInt): Pointer of object;
+  private
+    class function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
+    class function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
+    class function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
+    class function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
+    class function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; virtual; abstract;
   private type
     PSpoofInterfacedTypeSizeObject = ^TSpoofInterfacedTypeSizeObject;
     TSpoofInterfacedTypeSizeObject = record
@@ -242,7 +341,7 @@ type
       Selector: Boolean;
       Instance: Pointer;
 
-      class function Create(ASelector: Boolean; AInstance: Pointer): TComparerFactory.TInstance; static;
+      class function Create(ASelector: Boolean; AInstance: Pointer): TComparerService.TInstance; static;
     end;
 
     PComparerVMT = ^TComparerVMT;
@@ -255,9 +354,7 @@ type
 
     TSelectFunc = function(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 
-  private class var
-    ComparerFactory: TObjectList;
-
+  private
     class function CreateInterface(AVMT: Pointer; ASize: SizeInt): PSpoofInterfacedTypeSizeObject; static;
 
     class function SelectIntegerComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
@@ -266,11 +363,6 @@ type
     class function SelectShortStringComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
     class function SelectBinaryComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
     class function SelectDynArrayComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; static;
-
-    class constructor Create;
-    // important to call this code after auto release of this interface:
-    // TOrdinalComparer<T, THashFactory>.FExtendedEqualityComparer
-    class destructor Destroy;
   private const
     // IComparer VMT
     Comparer_Int8_VMT  : TComparerVMT = (STD_RAW_INTERFACE_METHODS; Compare: @TCompare.Int8);
@@ -339,21 +431,21 @@ type
     ComparerInstances: array[TTypeKind] of TInstance =
       (
         // tkUnknown
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer),
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer),
         // tkInteger
-        (Selector: True;  Instance: @TComparerFactory.SelectIntegerComparer),
+        (Selector: True;  Instance: @TComparerService.SelectIntegerComparer),
         // tkChar
         (Selector: False; Instance: @Comparer_UInt8_Instance),
         // tkEnumeration
-        (Selector: True;  Instance: @TComparerFactory.SelectIntegerComparer),
+        (Selector: True;  Instance: @TComparerService.SelectIntegerComparer),
         // tkFloat
-        (Selector: True;  Instance: @TComparerFactory.SelectFloatComparer),
+        (Selector: True;  Instance: @TComparerService.SelectFloatComparer),
         // tkSet
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer),
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer),
         // tkMethod
         (Selector: False; Instance: @Comparer_Method_Instance),
         // tkSString
-        (Selector: True;  Instance: @TComparerFactory.SelectShortStringComparer),
+        (Selector: True;  Instance: @TComparerService.SelectShortStringComparer),
         // tkLString - only internal use / deprecated in compiler
         (Selector: False; Instance: @Comparer_AnsiString_Instance), // <- unsure
         // tkAString
@@ -363,25 +455,25 @@ type
         // tkVariant
         (Selector: False; Instance: @Comparer_Variant_Instance),
         // tkArray
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer),
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer),
         // tkRecord
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer),
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer),
         // tkInterface
         (Selector: False; Instance: @Comparer_Pointer_Instance),
         // tkClass
         (Selector: False; Instance: @Comparer_Pointer_Instance),
         // tkObject
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer),
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer),
         // tkWChar
         (Selector: False; Instance: @Comparer_UInt16_Instance),
         // tkBool
-        (Selector: True;  Instance: @TComparerFactory.SelectIntegerComparer),
+        (Selector: True;  Instance: @TComparerService.SelectIntegerComparer),
         // tkInt64
         (Selector: False;  Instance: @Comparer_Int64_Instance),
         // tkQWord
         (Selector: False;  Instance: @Comparer_UInt64_Instance),
         // tkDynArray
-        (Selector: True;  Instance: @TComparerFactory.SelectDynArrayComparer),
+        (Selector: True;  Instance: @TComparerService.SelectDynArrayComparer),
         // tkInterfaceRaw
         (Selector: False; Instance: @Comparer_Pointer_Instance),
         // tkProcVar
@@ -393,213 +485,108 @@ type
         // tkHelper
         (Selector: False; Instance: @Comparer_Pointer_Instance),
         // tkFile
-        (Selector: True;  Instance: @TComparerFactory.SelectBinaryComparer), // <- unsure what type?
+        (Selector: True;  Instance: @TComparerService.SelectBinaryComparer), // <- unsure what type?
         // tkClassRef
         (Selector: False; Instance: @Comparer_Pointer_Instance),
         // tkPointer
         (Selector: False; Instance: @Comparer_Pointer_Instance)
       );
   public
-    constructor Create; virtual;
     class function LookupComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; static;
-
-    class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; virtual; abstract; reintroduce;
-    class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); virtual; abstract;
-    //class function GetHashCodeEx(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32; virtual; abstract;
-    //class procedure GetHashListEx(AKey: Pointer; ASize: SizeInt; AHashListAndInitValues: PUInt32; ACount: Integer); virtual; abstract;
-
-    class function Register(const AComparerFactory: TComparerFactoryClass): Integer;
   end;
 
-  { THashCode }
-
-  THashCode = class(TComparerFactory)
-  private type
-    PPEqualityComparerVMT = ^PEqualityComparerVMT;
-    PEqualityComparerVMT = ^TEqualityComparerVMT;
-    TEqualityComparerVMT = packed record
-      QueryInterface: Pointer;
-      _AddRef: Pointer;
-      _Release: Pointer;
-      Equals: Pointer;
-      GetHashCode: Pointer;
-      __Reserved: Pointer; // initially or TExtendedEqualityComparerVMT compatibility
-                           // (important when ExtendedEqualityComparer is calling Binary method)
-      __ClassRef: THashFactoryClass; // hidden field in VMT. For class ref THashFactoryClass
-    end;
-
-    { TInstance }
-    TSelectMethod = function(ATypeData: PTypeData; ASize: SizeInt): Pointer of object;
-  private
-(***********************************************************************************************************************
-      Hashes
-(**********************************************************************************************************************)
-
-    class function Int8         (constref AValue: Int8         ): UInt32; overload;
-    class function Int16        (constref AValue: Int16        ): UInt32; overload;
-    class function Int32        (constref AValue: Int32        ): UInt32; overload;
-    class function Int64        (constref AValue: Int64        ): UInt32; overload;
-    class function UInt8        (constref AValue: UInt8        ): UInt32; overload;
-    class function UInt16       (constref AValue: UInt16       ): UInt32; overload;
-    class function UInt32       (constref AValue: UInt32       ): UInt32; overload;
-    class function UInt64       (constref AValue: UInt64       ): UInt32; overload;
-    class function Single       (constref AValue: Single       ): UInt32; overload;
-    class function Double       (constref AValue: Double       ): UInt32; overload;
-    class function Extended     (constref AValue: Extended     ): UInt32; overload;
-    class function Currency     (constref AValue: Currency     ): UInt32; overload;
-    class function Comp         (constref AValue: Comp         ): UInt32; overload;
-    // warning ! self as PSpoofInterfacedTypeSizeObject
-    class function Binary       (constref AValue               ): UInt32; overload;
-    // warning ! self as PSpoofInterfacedTypeSizeObject
-    class function DynArray     (constref AValue: Pointer      ): UInt32; overload;
-    class function &Class       (constref AValue: TObject      ): UInt32; overload;
-    class function ShortString1 (constref AValue: ShortString1 ): UInt32; overload;
-    class function ShortString2 (constref AValue: ShortString2 ): UInt32; overload;
-    class function ShortString3 (constref AValue: ShortString3 ): UInt32; overload;
-    class function ShortString  (constref AValue: ShortString   ): UInt32; overload;
-    class function AnsiString   (constref AValue: AnsiString   ): UInt32; overload;
-    class function WideString   (constref AValue: WideString   ): UInt32; overload;
-    class function UnicodeString(constref AValue: UnicodeString): UInt32; overload;
-    class function Method       (constref AValue: TMethod      ): UInt32; overload;
-    class function Variant      (constref AValue: PVariant     ): UInt32; overload;
-    class function Pointer      (constref AValue: Pointer      ): UInt32; overload;
+  THashService = class(TComparerService)
   public
-    const MAX_HASHLIST_COUNT = 1;
-    const HASH_FUNCTIONS_COUNT = 1;
-    const HASHLIST_COUNT_PER_FUNCTION: array[1..HASH_FUNCTIONS_COUNT] of Integer = (1);
-    const HASH_FUNCTIONS_MASK_SIZE = 1;
+    class function LookupEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; virtual; abstract;
   end;
 
-  TExtendedHashCode = class(THashCode)
-  private type
-    PPExtendedEqualityComparerVMT = ^PExtendedEqualityComparerVMT;
-    PExtendedEqualityComparerVMT = ^TExtendedEqualityComparerVMT;
-    TExtendedEqualityComparerVMT = packed record
-      QueryInterface: Pointer;
-      _AddRef: Pointer;
-      _Release: Pointer;
-      Equals: Pointer;
-      GetHashCode: Pointer;
-      GetHashList: Pointer;
-      __ClassRef: TExtendedHashFactoryClass; // hidden field in VMT. For class ref THashFactoryClass
-    end;
-  private
-(***********************************************************************************************************************
-      Hashes 2
-(**********************************************************************************************************************)
-
-    class procedure Int8         (constref AValue: Int8         ; AHashList: PUInt32); overload;
-    class procedure Int16        (constref AValue: Int16        ; AHashList: PUInt32); overload;
-    class procedure Int32        (constref AValue: Int32        ; AHashList: PUInt32); overload;
-    class procedure Int64        (constref AValue: Int64        ; AHashList: PUInt32); overload;
-    class procedure UInt8        (constref AValue: UInt8        ; AHashList: PUInt32); overload;
-    class procedure UInt16       (constref AValue: UInt16       ; AHashList: PUInt32); overload;
-    class procedure UInt32       (constref AValue: UInt32       ; AHashList: PUInt32); overload;
-    class procedure UInt64       (constref AValue: UInt64       ; AHashList: PUInt32); overload;
-    class procedure Single       (constref AValue: Single       ; AHashList: PUInt32); overload;
-    class procedure Double       (constref AValue: Double       ; AHashList: PUInt32); overload;
-    class procedure Extended     (constref AValue: Extended     ; AHashList: PUInt32); overload;
-    class procedure Currency     (constref AValue: Currency     ; AHashList: PUInt32); overload;
-    class procedure Comp         (constref AValue: Comp         ; AHashList: PUInt32); overload;
-    // warning ! self as PSpoofInterfacedTypeSizeObject
-    class procedure Binary       (constref AValue               ; AHashList: PUInt32); overload;
-    // warning ! self as PSpoofInterfacedTypeSizeObject
-    class procedure DynArray     (constref AValue: Pointer      ; AHashList: PUInt32); overload;
-    class procedure &Class       (constref AValue: TObject      ; AHashList: PUInt32); overload;
-    class procedure ShortString1 (constref AValue: ShortString1 ; AHashList: PUInt32); overload;
-    class procedure ShortString2 (constref AValue: ShortString2 ; AHashList: PUInt32); overload;
-    class procedure ShortString3 (constref AValue: ShortString3 ; AHashList: PUInt32); overload;
-    class procedure ShortString  (constref AValue: ShortString   ; AHashList: PUInt32); overload;
-    class procedure AnsiString   (constref AValue: AnsiString   ; AHashList: PUInt32); overload;
-    class procedure WideString   (constref AValue: WideString   ; AHashList: PUInt32); overload;
-    class procedure UnicodeString(constref AValue: UnicodeString; AHashList: PUInt32); overload;
-    class procedure Method       (constref AValue: TMethod      ; AHashList: PUInt32); overload;
-    class procedure Variant      (constref AValue: PVariant     ; AHashList: PUInt32); overload;
-    class procedure Pointer      (constref AValue: Pointer      ; AHashList: PUInt32); overload;
+  TExtendedHashService = class(THashService)
+  public
+    class function LookupExtendedEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; virtual; abstract;
   end;
-
-  { THashFactory }
 
 {$DEFINE HASH_FACTORY := PPEqualityComparerVMT(Self)^.__ClassRef}
 {$DEFINE EXTENDED_HASH_FACTORY := PPExtendedEqualityComparerVMT(Self)^.__ClassRef}
 
-  THashFactory = class(THashCode)
+  { THashService }
+
+  THashService<T: THashFactory> = class(THashService)
   private
-    function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
   private const
     // IEqualityComparer VMT templates
 {$WARNINGS OFF}
-    EqualityComparer_Int8_VMT  : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int8  ; GetHashCode: @THashCode.Int8  );
-    EqualityComparer_Int16_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int16 ; GetHashCode: @THashCode.Int16 );
-    EqualityComparer_Int32_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int32 ; GetHashCode: @THashCode.Int32 );
-    EqualityComparer_Int64_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int64 ; GetHashCode: @THashCode.Int64 );
-    EqualityComparer_UInt8_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt8 ; GetHashCode: @THashCode.UInt8 );
-    EqualityComparer_UInt16_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt16; GetHashCode: @THashCode.UInt16);
-    EqualityComparer_UInt32_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt32; GetHashCode: @THashCode.UInt32);
-    EqualityComparer_UInt64_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt64; GetHashCode: @THashCode.UInt64);
+    EqualityComparer_Int8_VMT  : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int8  ; GetHashCode: @THashFactory.Int8  );
+    EqualityComparer_Int16_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int16 ; GetHashCode: @THashFactory.Int16 );
+    EqualityComparer_Int32_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int32 ; GetHashCode: @THashFactory.Int32 );
+    EqualityComparer_Int64_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int64 ; GetHashCode: @THashFactory.Int64 );
+    EqualityComparer_UInt8_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt8 ; GetHashCode: @THashFactory.UInt8 );
+    EqualityComparer_UInt16_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt16; GetHashCode: @THashFactory.UInt16);
+    EqualityComparer_UInt32_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt32; GetHashCode: @THashFactory.UInt32);
+    EqualityComparer_UInt64_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt64; GetHashCode: @THashFactory.UInt64);
 
-    EqualityComparer_Single_VMT  : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Single  ; GetHashCode: @THashCode.Single  );
-    EqualityComparer_Double_VMT  : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Double  ; GetHashCode: @THashCode.Double  );
-    EqualityComparer_Extended_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Extended; GetHashCode: @THashCode.Extended);
+    EqualityComparer_Single_VMT  : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Single  ; GetHashCode: @THashFactory.Single  );
+    EqualityComparer_Double_VMT  : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Double  ; GetHashCode: @THashFactory.Double  );
+    EqualityComparer_Extended_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Extended; GetHashCode: @THashFactory.Extended);
 
-    EqualityComparer_Currency_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Currency; GetHashCode: @THashCode.Currency);
-    EqualityComparer_Comp_VMT    : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Comp    ; GetHashCode: @THashCode.Comp    );
+    EqualityComparer_Currency_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Currency; GetHashCode: @THashFactory.Currency);
+    EqualityComparer_Comp_VMT    : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Comp    ; GetHashCode: @THashFactory.Comp    );
 
-    EqualityComparer_Binary_VMT  : TEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._Binary  ; GetHashCode: @THashCode.Binary  );
-    EqualityComparer_DynArray_VMT: TEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._DynArray; GetHashCode: @THashCode.DynArray);
+    EqualityComparer_Binary_VMT  : THashFactory.TEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._Binary  ; GetHashCode: @THashFactory.Binary  );
+    EqualityComparer_DynArray_VMT: THashFactory.TEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._DynArray; GetHashCode: @THashFactory.DynArray);
 
-    EqualityComparer_Class_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.&Class; GetHashCode: @THashCode.&Class);
+    EqualityComparer_Class_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.&Class; GetHashCode: @THashFactory.&Class);
 
-    EqualityComparer_ShortString1_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString1 ; GetHashCode: @THashCode.ShortString1 );
-    EqualityComparer_ShortString2_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString2 ; GetHashCode: @THashCode.ShortString2 );
-    EqualityComparer_ShortString3_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString3 ; GetHashCode: @THashCode.ShortString3 );
-    EqualityComparer_ShortString_VMT  : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString  ; GetHashCode: @THashCode.ShortString  );
-    EqualityComparer_AnsiString_VMT   : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.AnsiString   ; GetHashCode: @THashCode.AnsiString   );
-    EqualityComparer_WideString_VMT   : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.WideString   ; GetHashCode: @THashCode.WideString   );
-    EqualityComparer_UnicodeString_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UnicodeString; GetHashCode: @THashCode.UnicodeString);
+    EqualityComparer_ShortString1_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString1 ; GetHashCode: @THashFactory.ShortString1 );
+    EqualityComparer_ShortString2_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString2 ; GetHashCode: @THashFactory.ShortString2 );
+    EqualityComparer_ShortString3_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString3 ; GetHashCode: @THashFactory.ShortString3 );
+    EqualityComparer_ShortString_VMT  : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString  ; GetHashCode: @THashFactory.ShortString  );
+    EqualityComparer_AnsiString_VMT   : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.AnsiString   ; GetHashCode: @THashFactory.AnsiString   );
+    EqualityComparer_WideString_VMT   : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.WideString   ; GetHashCode: @THashFactory.WideString   );
+    EqualityComparer_UnicodeString_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UnicodeString; GetHashCode: @THashFactory.UnicodeString);
 
-    EqualityComparer_Method_VMT : TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Method ; GetHashCode: @THashCode.Method );
-    EqualityComparer_Variant_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Variant; GetHashCode: @THashCode.Variant);
-    EqualityComparer_Pointer_VMT: TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Pointer; GetHashCode: @THashCode.Pointer);
+    EqualityComparer_Method_VMT : THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Method ; GetHashCode: @THashFactory.Method );
+    EqualityComparer_Variant_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Variant; GetHashCode: @THashFactory.Variant);
+    EqualityComparer_Pointer_VMT: THashFactory.TEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Pointer; GetHashCode: @THashFactory.Pointer);
 {$WARNINGS ON}
-  private var
+  private class var
     // IEqualityComparer VMT
-    FEqualityComparer_Int8_VMT  : TEqualityComparerVMT;
-    FEqualityComparer_Int16_VMT : TEqualityComparerVMT;
-    FEqualityComparer_Int32_VMT : TEqualityComparerVMT;
-    FEqualityComparer_Int64_VMT : TEqualityComparerVMT;
-    FEqualityComparer_UInt8_VMT : TEqualityComparerVMT;
-    FEqualityComparer_UInt16_VMT: TEqualityComparerVMT;
-    FEqualityComparer_UInt32_VMT: TEqualityComparerVMT;
-    FEqualityComparer_UInt64_VMT: TEqualityComparerVMT;
+    FEqualityComparer_Int8_VMT  : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Int16_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Int32_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Int64_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_UInt8_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_UInt16_VMT: THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_UInt32_VMT: THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_UInt64_VMT: THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_Single_VMT  : TEqualityComparerVMT;
-    FEqualityComparer_Double_VMT  : TEqualityComparerVMT;
-    FEqualityComparer_Extended_VMT: TEqualityComparerVMT;
+    FEqualityComparer_Single_VMT  : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Double_VMT  : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Extended_VMT: THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_Currency_VMT: TEqualityComparerVMT;
-    FEqualityComparer_Comp_VMT    : TEqualityComparerVMT;
+    FEqualityComparer_Currency_VMT: THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Comp_VMT    : THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_Binary_VMT  : TEqualityComparerVMT;
-    FEqualityComparer_DynArray_VMT: TEqualityComparerVMT;
+    FEqualityComparer_Binary_VMT  : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_DynArray_VMT: THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_Class_VMT: TEqualityComparerVMT;
+    FEqualityComparer_Class_VMT: THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_ShortString1_VMT : TEqualityComparerVMT;
-    FEqualityComparer_ShortString2_VMT : TEqualityComparerVMT;
-    FEqualityComparer_ShortString3_VMT : TEqualityComparerVMT;
-    FEqualityComparer_ShortString_VMT  : TEqualityComparerVMT;
-    FEqualityComparer_AnsiString_VMT   : TEqualityComparerVMT;
-    FEqualityComparer_WideString_VMT   : TEqualityComparerVMT;
-    FEqualityComparer_UnicodeString_VMT: TEqualityComparerVMT;
+    FEqualityComparer_ShortString1_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_ShortString2_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_ShortString3_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_ShortString_VMT  : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_AnsiString_VMT   : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_WideString_VMT   : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_UnicodeString_VMT: THashFactory.TEqualityComparerVMT;
 
-    FEqualityComparer_Method_VMT : TEqualityComparerVMT;
-    FEqualityComparer_Variant_VMT: TEqualityComparerVMT;
-    FEqualityComparer_Pointer_VMT: TEqualityComparerVMT;
+    FEqualityComparer_Method_VMT : THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Variant_VMT: THashFactory.TEqualityComparerVMT;
+    FEqualityComparer_Pointer_VMT: THashFactory.TEqualityComparerVMT;
 
     FEqualityComparer_Int8_Instance         : Pointer;
     FEqualityComparer_Int16_Instance        : Pointer;
@@ -634,94 +621,91 @@ type
 
 
     FEqualityComparerInstances: array[TTypeKind] of TInstance;
+  private
+    class constructor Create;
   public
-    function LookupEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; override;
-
-    constructor Create; override;
-
-    //class function Hash(AKey: Pointer; ASize: SizeInt): UInt32; virtual; overload; abstract;
-    //class function Hash(AKey: Pointer; ASize: SizeInt; out AHash: UInt32): UInt32; virtual; overload;
+    class function LookupEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; override;
   end;
 
-  { TExtendedHashFactory }
+  { TExtendedHashService }
 
-  TExtendedHashFactory = class(TExtendedHashCode)
+  TExtendedHashService<T: TExtendedHashFactory> = class(TExtendedHashService)
   private
-    function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
-    function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
+    class function SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer; override;
   private const
     // IExtendedEqualityComparer VMT templates
 {$WARNINGS OFF}
-    ExtendedEqualityComparer_Int8_VMT  : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int8  ; GetHashCode: @THashCode.Int8  ; GetHashList: @TExtendedHashCode.Int8  );
-    ExtendedEqualityComparer_Int16_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int16 ; GetHashCode: @THashCode.Int16 ; GetHashList: @TExtendedHashCode.Int16 );
-    ExtendedEqualityComparer_Int32_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int32 ; GetHashCode: @THashCode.Int32 ; GetHashList: @TExtendedHashCode.Int32 );
-    ExtendedEqualityComparer_Int64_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int64 ; GetHashCode: @THashCode.Int64 ; GetHashList: @TExtendedHashCode.Int64 );
-    ExtendedEqualityComparer_UInt8_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt8 ; GetHashCode: @THashCode.UInt8 ; GetHashList: @TExtendedHashCode.UInt8 );
-    ExtendedEqualityComparer_UInt16_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt16; GetHashCode: @THashCode.UInt16; GetHashList: @TExtendedHashCode.UInt16);
-    ExtendedEqualityComparer_UInt32_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt32; GetHashCode: @THashCode.UInt32; GetHashList: @TExtendedHashCode.UInt32);
-    ExtendedEqualityComparer_UInt64_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt64; GetHashCode: @THashCode.UInt64; GetHashList: @TExtendedHashCode.UInt64);
+    ExtendedEqualityComparer_Int8_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int8  ; GetHashCode: @THashFactory.Int8  ; GetHashList: @TExtendedHashFactory.Int8  );
+    ExtendedEqualityComparer_Int16_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int16 ; GetHashCode: @THashFactory.Int16 ; GetHashList: @TExtendedHashFactory.Int16 );
+    ExtendedEqualityComparer_Int32_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int32 ; GetHashCode: @THashFactory.Int32 ; GetHashList: @TExtendedHashFactory.Int32 );
+    ExtendedEqualityComparer_Int64_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Int64 ; GetHashCode: @THashFactory.Int64 ; GetHashList: @TExtendedHashFactory.Int64 );
+    ExtendedEqualityComparer_UInt8_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt8 ; GetHashCode: @THashFactory.UInt8 ; GetHashList: @TExtendedHashFactory.UInt8 );
+    ExtendedEqualityComparer_UInt16_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt16; GetHashCode: @THashFactory.UInt16; GetHashList: @TExtendedHashFactory.UInt16);
+    ExtendedEqualityComparer_UInt32_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt32; GetHashCode: @THashFactory.UInt32; GetHashList: @TExtendedHashFactory.UInt32);
+    ExtendedEqualityComparer_UInt64_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UInt64; GetHashCode: @THashFactory.UInt64; GetHashList: @TExtendedHashFactory.UInt64);
 
-    ExtendedEqualityComparer_Single_VMT  : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Single  ; GetHashCode: @THashCode.Single  ; GetHashList: @TExtendedHashCode.Single  );
-    ExtendedEqualityComparer_Double_VMT  : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Double  ; GetHashCode: @THashCode.Double  ; GetHashList: @TExtendedHashCode.Double  );
-    ExtendedEqualityComparer_Extended_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Extended; GetHashCode: @THashCode.Extended; GetHashList: @TExtendedHashCode.Extended);
+    ExtendedEqualityComparer_Single_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Single  ; GetHashCode: @THashFactory.Single  ; GetHashList: @TExtendedHashFactory.Single  );
+    ExtendedEqualityComparer_Double_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Double  ; GetHashCode: @THashFactory.Double  ; GetHashList: @TExtendedHashFactory.Double  );
+    ExtendedEqualityComparer_Extended_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Extended; GetHashCode: @THashFactory.Extended; GetHashList: @TExtendedHashFactory.Extended);
 
-    ExtendedEqualityComparer_Currency_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Currency; GetHashCode: @THashCode.Currency; GetHashList: @TExtendedHashCode.Currency);
-    ExtendedEqualityComparer_Comp_VMT    : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Comp    ; GetHashCode: @THashCode.Comp    ; GetHashList: @TExtendedHashCode.Comp    );
+    ExtendedEqualityComparer_Currency_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Currency; GetHashCode: @THashFactory.Currency; GetHashList: @TExtendedHashFactory.Currency);
+    ExtendedEqualityComparer_Comp_VMT    : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Comp    ; GetHashCode: @THashFactory.Comp    ; GetHashList: @TExtendedHashFactory.Comp    );
 
-    ExtendedEqualityComparer_Binary_VMT  : TExtendedEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._Binary  ; GetHashCode: @THashCode.Binary  ; GetHashList: @TExtendedHashCode.Binary   );
-    ExtendedEqualityComparer_DynArray_VMT: TExtendedEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._DynArray; GetHashCode: @THashCode.DynArray; GetHashList: @TExtendedHashCode.DynArray);
+    ExtendedEqualityComparer_Binary_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._Binary  ; GetHashCode: @THashFactory.Binary  ; GetHashList: @TExtendedHashFactory.Binary   );
+    ExtendedEqualityComparer_DynArray_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_COM_TYPESIZE_INTERFACE_METHODS; Equals: @TEquals._DynArray; GetHashCode: @THashFactory.DynArray; GetHashList: @TExtendedHashFactory.DynArray);
 
-    ExtendedEqualityComparer_Class_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.&Class; GetHashCode: @THashCode.&Class; GetHashList: @TExtendedHashCode.&Class);
+    ExtendedEqualityComparer_Class_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.&Class; GetHashCode: @THashFactory.&Class; GetHashList: @TExtendedHashFactory.&Class);
 
-    ExtendedEqualityComparer_ShortString1_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString1 ; GetHashCode: @THashCode.ShortString1 ; GetHashList: @TExtendedHashCode.ShortString1 );
-    ExtendedEqualityComparer_ShortString2_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString2 ; GetHashCode: @THashCode.ShortString2 ; GetHashList: @TExtendedHashCode.ShortString2 );
-    ExtendedEqualityComparer_ShortString3_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString3 ; GetHashCode: @THashCode.ShortString3 ; GetHashList: @TExtendedHashCode.ShortString3 );
-    ExtendedEqualityComparer_ShortString_VMT  : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString  ; GetHashCode: @THashCode.ShortString  ; GetHashList: @TExtendedHashCode.ShortString  );
-    ExtendedEqualityComparer_AnsiString_VMT   : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.AnsiString   ; GetHashCode: @THashCode.AnsiString   ; GetHashList: @TExtendedHashCode.AnsiString   );
-    ExtendedEqualityComparer_WideString_VMT   : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.WideString   ; GetHashCode: @THashCode.WideString   ; GetHashList: @TExtendedHashCode.WideString   );
-    ExtendedEqualityComparer_UnicodeString_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UnicodeString; GetHashCode: @THashCode.UnicodeString; GetHashList: @TExtendedHashCode.UnicodeString);
+    ExtendedEqualityComparer_ShortString1_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString1 ; GetHashCode: @THashFactory.ShortString1 ; GetHashList: @TExtendedHashFactory.ShortString1 );
+    ExtendedEqualityComparer_ShortString2_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString2 ; GetHashCode: @THashFactory.ShortString2 ; GetHashList: @TExtendedHashFactory.ShortString2 );
+    ExtendedEqualityComparer_ShortString3_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString3 ; GetHashCode: @THashFactory.ShortString3 ; GetHashList: @TExtendedHashFactory.ShortString3 );
+    ExtendedEqualityComparer_ShortString_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.ShortString  ; GetHashCode: @THashFactory.ShortString  ; GetHashList: @TExtendedHashFactory.ShortString  );
+    ExtendedEqualityComparer_AnsiString_VMT   : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.AnsiString   ; GetHashCode: @THashFactory.AnsiString   ; GetHashList: @TExtendedHashFactory.AnsiString   );
+    ExtendedEqualityComparer_WideString_VMT   : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.WideString   ; GetHashCode: @THashFactory.WideString   ; GetHashList: @TExtendedHashFactory.WideString   );
+    ExtendedEqualityComparer_UnicodeString_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.UnicodeString; GetHashCode: @THashFactory.UnicodeString; GetHashList: @TExtendedHashFactory.UnicodeString);
 
-    ExtendedEqualityComparer_Method_VMT : TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Method ; GetHashCode: @THashCode.Method ; GetHashList: @TExtendedHashCode.Method );
-    ExtendedEqualityComparer_Variant_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Variant; GetHashCode: @THashCode.Variant; GetHashList: @TExtendedHashCode.Variant);
-    ExtendedEqualityComparer_Pointer_VMT: TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Pointer; GetHashCode: @THashCode.Pointer; GetHashList: @TExtendedHashCode.Pointer);
+    ExtendedEqualityComparer_Method_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Method ; GetHashCode: @THashFactory.Method ; GetHashList: @TExtendedHashFactory.Method );
+    ExtendedEqualityComparer_Variant_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Variant; GetHashCode: @THashFactory.Variant; GetHashList: @TExtendedHashFactory.Variant);
+    ExtendedEqualityComparer_Pointer_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT = (STD_RAW_INTERFACE_METHODS; Equals: @TEquals.Pointer; GetHashCode: @THashFactory.Pointer; GetHashList: @TExtendedHashFactory.Pointer);
 {$WARNINGS ON}
-  private var
+  private class var
     // IExtendedEqualityComparer VMT
-    FExtendedEqualityComparer_Int8_VMT  : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Int16_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Int32_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Int64_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_UInt8_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_UInt16_VMT: TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_UInt32_VMT: TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_UInt64_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Int8_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Int16_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Int32_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Int64_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_UInt8_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_UInt16_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_UInt32_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_UInt64_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_Single_VMT  : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Double_VMT  : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Extended_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Single_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Double_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Extended_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_Currency_VMT: TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Comp_VMT    : TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Currency_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Comp_VMT    : TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_Binary_VMT  : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_DynArray_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Binary_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_DynArray_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_Class_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Class_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_ShortString1_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_ShortString2_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_ShortString3_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_ShortString_VMT  : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_AnsiString_VMT   : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_WideString_VMT   : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_UnicodeString_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_ShortString1_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_ShortString2_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_ShortString3_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_ShortString_VMT  : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_AnsiString_VMT   : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_WideString_VMT   : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_UnicodeString_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
-    FExtendedEqualityComparer_Method_VMT : TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Variant_VMT: TExtendedEqualityComparerVMT;
-    FExtendedEqualityComparer_Pointer_VMT: TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Method_VMT : TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Variant_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
+    FExtendedEqualityComparer_Pointer_VMT: TExtendedHashFactory.TExtendedEqualityComparerVMT;
 
     FExtendedEqualityComparer_Int8_Instance         : Pointer;
     FExtendedEqualityComparer_Int16_Instance        : Pointer;
@@ -756,10 +740,10 @@ type
 
     // all instances
     FExtendedEqualityComparerInstances: array[TTypeKind] of TInstance;
+  private
+    class constructor Create;
   public
-    function LookupExtendedEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; override;
-
-    constructor Create; override;
+    class function LookupExtendedEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; override;
   end;
 
   TOnEqualityComparison<T> = function(constref ALeft, ARight: T): Boolean of object;
@@ -773,7 +757,7 @@ type
   TEqualityComparer<T> = class(TInterfacedObject, IEqualityComparer<T>)
   public
     class function Default: IEqualityComparer<T>; static; overload;
-    class function Default(AHashFactoryClass: TComparerFactoryClass): IEqualityComparer<T>; static; overload;
+    class function Default(AHashFactoryClass: THashFactoryClass): IEqualityComparer<T>; static; overload;
 
     class function Construct(const AEqualityComparison: TOnEqualityComparison<T>;
       const AHasher: TOnHasher<T>): IEqualityComparer<T>; overload;
@@ -866,60 +850,38 @@ type
   { TDelphiHashFactory }
 
   TDelphiHashFactory = class(THashFactory)
-  strict private class var
-    FID: Integer;
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
   { TAdler32HashFactory }
 
   TAdler32HashFactory = class(THashFactory)
-  strict private class var
-    FID: Integer;
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
   { TSdbmHashFactory }
 
   TSdbmHashFactory = class(THashFactory)
-  strict private class var
-    FID: Integer;
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
   { TSdbmHashFactory }
 
   TSimpleChecksumFactory = class(THashFactory)
-  strict private class var
-    FID: Integer;
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
   { TDelphiDoubleHashFactory }
 
   TDelphiDoubleHashFactory = class(TExtendedHashFactory)
-  strict private class var
-    FID: Integer;
-
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
     const MAX_HASHLIST_COUNT = 2;
     const HASH_FUNCTIONS_COUNT = 1;
@@ -927,17 +889,12 @@ type
     const HASH_FUNCTIONS_MASK_SIZE = 1;
     const HASH_FUNCTIONS_MASK = 1; // 00000001b
 
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
     class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); override;
   end;
 
   TDelphiQuadrupleHashFactory = class(TExtendedHashFactory)
-  strict private class var
-    FID: Integer;
-
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
     const MAX_HASHLIST_COUNT = 4;
     const HASH_FUNCTIONS_COUNT = 2;
@@ -945,17 +902,12 @@ type
     const HASH_FUNCTIONS_MASK_SIZE = 2;
     const HASH_FUNCTIONS_MASK = 3; // 00000011b
 
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
     class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); override;
   end;
 
   TDelphiSixfoldHashFactory = class(TExtendedHashFactory)
-  strict private class var
-    FID: Integer;
-
-    class constructor Create;
-  protected
-    class function GetID: Integer; override;
   public
     const MAX_HASHLIST_COUNT = 6;
     const HASH_FUNCTIONS_COUNT = 3;
@@ -963,6 +915,7 @@ type
     const HASH_FUNCTIONS_MASK_SIZE = 3;
     const HASH_FUNCTIONS_MASK = 7; // 00000111b
 
+    class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
     class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); override;
   end;
@@ -1051,7 +1004,7 @@ function BinaryCompare(const ALeft, ARight: Pointer; ASize: PtrUInt): Integer; i
 
 function _LookupVtableInfo(AGInterface: TDefaultGenericInterface; ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer; inline;
 function _LookupVtableInfoEx(AGInterface: TDefaultGenericInterface; ATypeInfo: PTypeInfo; ASize: SizeInt;
-  AFactory: TComparerFactoryClass): Pointer;
+  AFactory: THashFactoryClass): Pointer;
 
 implementation
 
@@ -1115,14 +1068,14 @@ end;
 
 function TComTypeSizeInterface._AddRef: Integer;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
 begin
   Result := InterLockedIncrement(_self.RefCount);
 end;
 
 function TComTypeSizeInterface._Release: Integer;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
 begin
   Result := InterLockedDecrement(_self.RefCount);
   if _self.RefCount = 0 then
@@ -1278,14 +1231,14 @@ end;
 
 class function TCompare._Binary(constref ALeft, ARight): Integer;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
 begin
   Result := CompareMemRange(@ALeft, @ARight, _self.Size);
 end;
 
 class function TCompare._DynArray(constref ALeft, ARight: Pointer): Integer;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
   LLength, LLeftLength, LRightLength: Integer;
 begin
   LLeftLength := DynArraySize(ALeft);
@@ -1537,14 +1490,14 @@ end;
 
 class function TEquals._Binary(constref ALeft, ARight): Boolean;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
 begin
   Result := CompareMem(@ALeft, @ARight, _self.Size);
 end;
 
 class function TEquals._DynArray(constref ALeft, ARight: Pointer): Boolean;
 var
-  _self: TComparerFactory.PSpoofInterfacedTypeSizeObject absolute Self;
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
   LLength: Integer;
 begin
   LLength := DynArraySize(ALeft);
@@ -1653,9 +1606,434 @@ begin
   Result := ALeft = ARight;
 end;
 
-{ TComparerFactory }
+(***********************************************************************************************************************
+  Hashes
+(**********************************************************************************************************************)
 
-class function TComparerFactory.CreateInterface(AVMT: Pointer; ASize: SizeInt): PSpoofInterfacedTypeSizeObject;
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode Int8 - Int32 and UInt8 - UInt32
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Int8(constref AValue: Int8): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int8), 0);
+end;
+
+class function THashFactory.Int16(constref AValue: Int16): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int16), 0);
+end;
+
+class function THashFactory.Int32(constref AValue: Int32): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int32), 0);
+end;
+
+class function THashFactory.Int64(constref AValue: Int64): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
+end;
+
+class function THashFactory.UInt8(constref AValue: UInt8): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt8), 0);
+end;
+
+class function THashFactory.UInt16(constref AValue: UInt16): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt16), 0);
+end;
+
+class function THashFactory.UInt32(constref AValue: UInt32): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt32), 0);
+end;
+
+class function THashFactory.UInt64(constref AValue: UInt64): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt64), 0);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Float types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Single(constref AValue: Single): UInt32;
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
+  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
+end;
+
+class function THashFactory.Double(constref AValue: Double): UInt32;
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
+  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
+end;
+
+class function THashFactory.Extended(constref AValue: Extended): UInt32;
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
+  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for other number types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Currency(constref AValue: Currency): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
+end;
+
+class function THashFactory.Comp(constref AValue: Comp): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for binary data (records etc) and dynamics arrays
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Binary(constref AValue): UInt32;
+var
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, _self.Size, 0);
+end;
+
+class function THashFactory.DynArray(constref AValue: Pointer): UInt32;
+var
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
+begin
+  Result := HASH_FACTORY.GetHashCode(AValue, DynArraySize(AValue) * _self.Size, 0);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for classes
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.&Class(constref AValue: TObject): UInt32;
+begin
+  if AValue = nil then
+    Exit($2A);
+
+  Result := AValue.GetHashCode;
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for string types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.ShortString1(constref AValue: ShortString1): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
+end;
+
+class function THashFactory.ShortString2(constref AValue: ShortString2): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
+end;
+
+class function THashFactory.ShortString3(constref AValue: ShortString3): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
+end;
+
+class function THashFactory.ShortString(constref AValue: ShortString): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
+end;
+
+class function THashFactory.AnsiString(constref AValue: AnsiString): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.AnsiChar), 0);
+end;
+
+class function THashFactory.WideString(constref AValue: WideString): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.WideChar), 0);
+end;
+
+class function THashFactory.UnicodeString(constref AValue: UnicodeString): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.UnicodeChar), 0);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Delegates
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Method(constref AValue: TMethod): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.TMethod), 0);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Variant
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Variant(constref AValue: PVariant): UInt32;
+begin
+  try
+    Result := HASH_FACTORY.UnicodeString(AValue^);
+  except
+    Result := HASH_FACTORY.GetHashCode(AValue, SizeOf(System.Variant), 0);
+  end;
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Pointer
+{----------------------------------------------------------------------------------------------------------------------}
+
+class function THashFactory.Pointer(constref AValue: Pointer): UInt32;
+begin
+  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Pointer), 0);
+end;
+
+{ TExtendedHashFactory }
+
+(***********************************************************************************************************************
+  Hashes 2
+(**********************************************************************************************************************)
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode Int8 - Int32 and UInt8 - UInt32
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Int8(constref AValue: Int8; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int8), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.Int16(constref AValue: Int16; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int16), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.Int32(constref AValue: Int32; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int32), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.Int64(constref AValue: Int64; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.UInt8(constref AValue: UInt8; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt8), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.UInt16(constref AValue: UInt16; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt16), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.UInt32(constref AValue: UInt32; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt32), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.UInt64(constref AValue: UInt64; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt64), AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Float types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Single(constref AValue: Single; AHashList: PUInt32);
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
+  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
+end;
+
+class procedure TExtendedHashFactory.Double(constref AValue: Double; AHashList: PUInt32);
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
+  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
+end;
+
+class procedure TExtendedHashFactory.Extended(constref AValue: Extended; AHashList: PUInt32);
+var
+  LMantissa: Float;
+  LExponent: Integer;
+begin
+  Frexp(AValue, LMantissa, LExponent);
+
+  if LMantissa = 0 then
+    LMantissa := Abs(LMantissa);
+
+  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
+  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for other number types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Currency(constref AValue: Currency; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.Comp(constref AValue: Comp; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for binary data (records etc) and dynamics arrays
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Binary(constref AValue; AHashList: PUInt32);
+var
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, _self.Size, AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.DynArray(constref AValue: Pointer; AHashList: PUInt32);
+var
+  _self: TComparerService.PSpoofInterfacedTypeSizeObject absolute Self;
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(AValue, DynArraySize(AValue) * _self.Size, AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for classes
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.&Class(constref AValue: TObject; AHashList: PUInt32);
+var
+  LValue: PtrInt;
+begin
+  if AValue = nil then
+  begin
+    LValue := $2A;
+    EXTENDED_HASH_FACTORY.GetHashList(@LValue, SizeOf(LValue), AHashList, []);
+    Exit;
+  end;
+
+  LValue := AValue.GetHashCode;
+  EXTENDED_HASH_FACTORY.GetHashList(@LValue, SizeOf(LValue), AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for string types
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.ShortString1(constref AValue: ShortString1; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.ShortString2(constref AValue: ShortString2; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.ShortString3(constref AValue: ShortString3; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.ShortString(constref AValue: ShortString; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.AnsiString(constref AValue: AnsiString; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.AnsiChar), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.WideString(constref AValue: WideString; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.WideChar), AHashList, []);
+end;
+
+class procedure TExtendedHashFactory.UnicodeString(constref AValue: UnicodeString; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.UnicodeChar), AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Delegates
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Method(constref AValue: TMethod; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.TMethod), AHashList, []);
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Variant
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Variant(constref AValue: PVariant; AHashList: PUInt32);
+begin
+  try
+    EXTENDED_HASH_FACTORY.UnicodeString(AValue^, AHashList);
+  except
+    EXTENDED_HASH_FACTORY.GetHashList(AValue, SizeOf(System.Variant), AHashList, []);
+  end;
+end;
+
+{-----------------------------------------------------------------------------------------------------------------------
+  GetHashCode for Pointer
+{----------------------------------------------------------------------------------------------------------------------}
+
+class procedure TExtendedHashFactory.Pointer(constref AValue: Pointer; AHashList: PUInt32);
+begin
+  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Pointer), AHashList, []);
+end;
+
+{ TComparerService }
+
+class function TComparerService.CreateInterface(AVMT: Pointer; ASize: SizeInt): PSpoofInterfacedTypeSizeObject;
 begin
     Result := New(PSpoofInterfacedTypeSizeObject);
     Result.VMT      := AVMT;
@@ -1663,7 +2041,7 @@ begin
     Result.Size     := ASize;
 end;
 
-class function TComparerFactory.SelectIntegerComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function TComparerService.SelectIntegerComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   case ATypeData.OrdType of
     otSByte:
@@ -1684,7 +2062,7 @@ begin
   end;
 end;
 
-class function TComparerFactory.SelectInt64Comparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function TComparerService.SelectInt64Comparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   if ATypeData.MaxInt64Value > ATypeData.MinInt64Value then
     Exit(@Comparer_Int64_Instance)
@@ -1692,7 +2070,7 @@ begin
     Exit(@Comparer_UInt64_Instance);
 end;
 
-class function TComparerFactory.SelectFloatComparer(ATypeData: PTypeData;
+class function TComparerService.SelectFloatComparer(ATypeData: PTypeData;
   ASize: SizeInt): Pointer;
 begin
   case ATypeData.FloatType of
@@ -1712,7 +2090,7 @@ begin
   end;
 end;
 
-class function TComparerFactory.SelectShortStringComparer(ATypeData: PTypeData;
+class function TComparerService.SelectShortStringComparer(ATypeData: PTypeData;
   ASize: SizeInt): Pointer;
 begin
   case ASize of
@@ -1724,7 +2102,7 @@ begin
   end;
 end;
 
-class function TComparerFactory.SelectBinaryComparer(ATypeData: PTypeData;
+class function TComparerService.SelectBinaryComparer(ATypeData: PTypeData;
   ASize: SizeInt): Pointer;
 begin
   case ASize of
@@ -1739,16 +2117,12 @@ begin
   end;
 end;
 
-class function TComparerFactory.SelectDynArrayComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function TComparerService.SelectDynArrayComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   Result := CreateInterface(@Comparer_DynArray_VMT, ATypeData.elSize);
 end;
 
-constructor TComparerFactory.Create;
-begin
-end;
-
-class function TComparerFactory.LookupComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer;
+class function TComparerService.LookupComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer;
 var
   LInstance: PInstance;
 begin
@@ -1763,460 +2137,18 @@ begin
   end;
 end;
 
-class function TComparerFactory.Register(const AComparerFactory: TComparerFactoryClass): Integer;
-begin
-  Result := ComparerFactory.Add(AComparerFactory.Create);
-end;
+{ TComparerService.TInstance }
 
-class constructor TComparerFactory.Create;
-begin
-  ComparerFactory := TObjectList.Create;
-end;
-
-class destructor TComparerFactory.Destroy;
-begin
-  ComparerFactory.Free;
-end;
-
-{ TComparerFactory.TInstance }
-
-class function TComparerFactory.TInstance.Create(ASelector: Boolean;
-  AInstance: Pointer): THashCode.TInstance;
+class function TComparerService.TInstance.Create(ASelector: Boolean;
+  AInstance: Pointer): TComparerService.TInstance;
 begin
   Result.Selector := ASelector;
   Result.Instance := AInstance;
 end;
 
-{ THashCode }
+{ THashService }
 
-(***********************************************************************************************************************
-  Hashes
-(**********************************************************************************************************************)
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode Int8 - Int32 and UInt8 - UInt32
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Int8(constref AValue: Int8): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int8), 0);
-end;
-
-class function THashCode.Int16(constref AValue: Int16): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int16), 0);
-end;
-
-class function THashCode.Int32(constref AValue: Int32): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int32), 0);
-end;
-
-class function THashCode.Int64(constref AValue: Int64): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
-end;
-
-class function THashCode.UInt8(constref AValue: UInt8): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt8), 0);
-end;
-
-class function THashCode.UInt16(constref AValue: UInt16): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt16), 0);
-end;
-
-class function THashCode.UInt32(constref AValue: UInt32): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt32), 0);
-end;
-
-class function THashCode.UInt64(constref AValue: UInt64): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.UInt64), 0);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Float types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Single(constref AValue: Single): UInt32;
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
-  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
-end;
-
-class function THashCode.Double(constref AValue: Double): UInt32;
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
-  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
-end;
-
-class function THashCode.Extended(constref AValue: Extended): UInt32;
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  Result := HASH_FACTORY.GetHashCode(@LMantissa, SizeOf(Math.Float), 0);
-  Result := HASH_FACTORY.GetHashCode(@LExponent, SizeOf(System.Integer), Result);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for other number types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Currency(constref AValue: Currency): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
-end;
-
-class function THashCode.Comp(constref AValue: Comp): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Int64), 0);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for binary data (records etc) and dynamics arrays
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Binary(constref AValue): UInt32;
-var
-  _self: PSpoofInterfacedTypeSizeObject absolute Self;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, _self.Size, 0);
-end;
-
-class function THashCode.DynArray(constref AValue: Pointer): UInt32;
-var
-  _self: PSpoofInterfacedTypeSizeObject absolute Self;
-begin
-  Result := HASH_FACTORY.GetHashCode(AValue, DynArraySize(AValue) * _self.Size, 0);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for classes
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.&Class(constref AValue: TObject): UInt32;
-begin
-  if AValue = nil then
-    Exit($2A);
-
-  Result := AValue.GetHashCode;
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for string types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.ShortString1(constref AValue: ShortString1): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
-end;
-
-class function THashCode.ShortString2(constref AValue: ShortString2): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
-end;
-
-class function THashCode.ShortString3(constref AValue: ShortString3): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
-end;
-
-class function THashCode.ShortString(constref AValue: ShortString): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue), 0);
-end;
-
-class function THashCode.AnsiString(constref AValue: AnsiString): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.AnsiChar), 0);
-end;
-
-class function THashCode.WideString(constref AValue: WideString): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.WideChar), 0);
-end;
-
-class function THashCode.UnicodeString(constref AValue: UnicodeString): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue[1], Length(AValue) * SizeOf(System.UnicodeChar), 0);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Delegates
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Method(constref AValue: TMethod): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.TMethod), 0);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Variant
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Variant(constref AValue: PVariant): UInt32;
-begin
-  try
-    Result := HASH_FACTORY.UnicodeString(AValue^);
-  except
-    Result := HASH_FACTORY.GetHashCode(AValue, SizeOf(System.Variant), 0);
-  end;
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Pointer
-{----------------------------------------------------------------------------------------------------------------------}
-
-class function THashCode.Pointer(constref AValue: Pointer): UInt32;
-begin
-  Result := HASH_FACTORY.GetHashCode(@AValue, SizeOf(System.Pointer), 0);
-end;
-
-{ TExtendedHashCode }
-
-(***********************************************************************************************************************
-  Hashes 2
-(**********************************************************************************************************************)
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode Int8 - Int32 and UInt8 - UInt32
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Int8(constref AValue: Int8; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int8), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.Int16(constref AValue: Int16; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int16), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.Int32(constref AValue: Int32; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int32), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.Int64(constref AValue: Int64; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.UInt8(constref AValue: UInt8; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt8), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.UInt16(constref AValue: UInt16; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt16), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.UInt32(constref AValue: UInt32; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt32), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.UInt64(constref AValue: UInt64; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.UInt64), AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Float types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Single(constref AValue: Single; AHashList: PUInt32);
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
-  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
-end;
-
-class procedure TExtendedHashCode.Double(constref AValue: Double; AHashList: PUInt32);
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
-  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
-end;
-
-class procedure TExtendedHashCode.Extended(constref AValue: Extended; AHashList: PUInt32);
-var
-  LMantissa: Float;
-  LExponent: Integer;
-begin
-  Frexp(AValue, LMantissa, LExponent);
-
-  if LMantissa = 0 then
-    LMantissa := Abs(LMantissa);
-
-  EXTENDED_HASH_FACTORY.GetHashList(@LMantissa, SizeOf(Math.Float), AHashList, []);
-  EXTENDED_HASH_FACTORY.GetHashList(@LExponent, SizeOf(System.Integer), AHashList, [ghloHashListAsInitData]);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for other number types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Currency(constref AValue: Currency; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.Comp(constref AValue: Comp; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Int64), AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for binary data (records etc) and dynamics arrays
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Binary(constref AValue; AHashList: PUInt32);
-var
-  _self: PSpoofInterfacedTypeSizeObject absolute Self;
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, _self.Size, AHashList, []);
-end;
-
-class procedure TExtendedHashCode.DynArray(constref AValue: Pointer; AHashList: PUInt32);
-var
-  _self: PSpoofInterfacedTypeSizeObject absolute Self;
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(AValue, DynArraySize(AValue) * _self.Size, AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for classes
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.&Class(constref AValue: TObject; AHashList: PUInt32);
-var
-  LValue: PtrInt;
-begin
-  if AValue = nil then
-  begin
-    LValue := $2A;
-    EXTENDED_HASH_FACTORY.GetHashList(@LValue, SizeOf(LValue), AHashList, []);
-    Exit;
-  end;
-
-  LValue := AValue.GetHashCode;
-  EXTENDED_HASH_FACTORY.GetHashList(@LValue, SizeOf(LValue), AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for string types
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.ShortString1(constref AValue: ShortString1; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.ShortString2(constref AValue: ShortString2; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.ShortString3(constref AValue: ShortString3; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.ShortString(constref AValue: ShortString; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.AnsiString(constref AValue: AnsiString; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.AnsiChar), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.WideString(constref AValue: WideString; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.WideChar), AHashList, []);
-end;
-
-class procedure TExtendedHashCode.UnicodeString(constref AValue: UnicodeString; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue[1], Length(AValue) * SizeOf(System.UnicodeChar), AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Delegates
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Method(constref AValue: TMethod; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.TMethod), AHashList, []);
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Variant
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Variant(constref AValue: PVariant; AHashList: PUInt32);
-begin
-  try
-    EXTENDED_HASH_FACTORY.UnicodeString(AValue^, AHashList);
-  except
-    EXTENDED_HASH_FACTORY.GetHashList(AValue, SizeOf(System.Variant), AHashList, []);
-  end;
-end;
-
-{-----------------------------------------------------------------------------------------------------------------------
-  GetHashCode for Pointer
-{----------------------------------------------------------------------------------------------------------------------}
-
-class procedure TExtendedHashCode.Pointer(constref AValue: Pointer; AHashList: PUInt32);
-begin
-  EXTENDED_HASH_FACTORY.GetHashList(@AValue, SizeOf(System.Pointer), AHashList, []);
-end;
-
-{ THashFactory }
-
-function THashFactory.SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function THashService<T>.SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   case ATypeData.OrdType of
     otSByte:
@@ -2237,7 +2169,8 @@ begin
   end;
 end;
 
-function THashFactory.SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function THashService<T>.SelectFloatEqualityComparer(ATypeData: PTypeData;
+  ASize: SizeInt): Pointer;
 begin
   case ATypeData.FloatType of
     ftSingle:
@@ -2256,7 +2189,8 @@ begin
   end;
 end;
 
-function THashFactory.SelectShortStringEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function THashService<T>.SelectShortStringEqualityComparer(
+  ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   case ASize of
     2: Exit(@FEqualityComparer_ShortString1_Instance);
@@ -2267,7 +2201,8 @@ begin
   end
 end;
 
-function THashFactory.SelectBinaryEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function THashService<T>.SelectBinaryEqualityComparer(ATypeData: PTypeData;
+  ASize: SizeInt): Pointer;
 begin
   case ASize of
     1: Exit(@FEqualityComparer_UInt8_Instance);
@@ -2281,12 +2216,14 @@ begin
   end;
 end;
 
-function THashFactory.SelectDynArrayEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function THashService<T>.SelectDynArrayEqualityComparer(
+  ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   Result := CreateInterface(@FEqualityComparer_DynArray_VMT, ATypeData.elSize);
 end;
 
-function THashFactory.LookupEqualityComparer(ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer;
+class function THashService<T>.LookupEqualityComparer(ATypeInfo: PTypeInfo;
+  ASize: SizeInt): Pointer;
 var
   LInstance: PInstance;
   LSelectMethod: TSelectMethod;
@@ -2306,10 +2243,8 @@ begin
   end;
 end;
 
-constructor THashFactory.Create;
+class constructor THashService<T>.Create;
 begin
-  inherited;
-
   FEqualityComparer_Int8_VMT          := EqualityComparer_Int8_VMT         ;
   FEqualityComparer_Int16_VMT         := EqualityComparer_Int16_VMT        ;
   FEqualityComparer_Int32_VMT         := EqualityComparer_Int32_VMT        ;
@@ -2338,32 +2273,32 @@ begin
   FEqualityComparer_Pointer_VMT       := EqualityComparer_Pointer_VMT      ;
 
   /////
-  FEqualityComparer_Int8_VMT.__ClassRef          := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Int16_VMT.__ClassRef         := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Int32_VMT.__ClassRef         := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Int64_VMT.__ClassRef         := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_UInt8_VMT.__ClassRef         := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_UInt16_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_UInt32_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_UInt64_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Single_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Double_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Extended_VMT.__ClassRef      := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Currency_VMT.__ClassRef      := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Comp_VMT.__ClassRef          := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Binary_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_DynArray_VMT.__ClassRef      := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Class_VMT.__ClassRef         := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_ShortString1_VMT.__ClassRef  := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_ShortString2_VMT.__ClassRef  := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_ShortString3_VMT.__ClassRef  := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_ShortString_VMT.__ClassRef   := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_AnsiString_VMT.__ClassRef    := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_WideString_VMT.__ClassRef    := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_UnicodeString_VMT.__ClassRef := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Method_VMT.__ClassRef        := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Variant_VMT.__ClassRef       := THashFactoryClass(Self.ClassType);
-  FEqualityComparer_Pointer_VMT.__ClassRef       := THashFactoryClass(Self.ClassType);
+  FEqualityComparer_Int8_VMT.__ClassRef          := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Int16_VMT.__ClassRef         := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Int32_VMT.__ClassRef         := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Int64_VMT.__ClassRef         := THashFactoryClass(T.ClassType);
+  FEqualityComparer_UInt8_VMT.__ClassRef         := THashFactoryClass(T.ClassType);
+  FEqualityComparer_UInt16_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_UInt32_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_UInt64_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Single_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Double_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Extended_VMT.__ClassRef      := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Currency_VMT.__ClassRef      := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Comp_VMT.__ClassRef          := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Binary_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_DynArray_VMT.__ClassRef      := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Class_VMT.__ClassRef         := THashFactoryClass(T.ClassType);
+  FEqualityComparer_ShortString1_VMT.__ClassRef  := THashFactoryClass(T.ClassType);
+  FEqualityComparer_ShortString2_VMT.__ClassRef  := THashFactoryClass(T.ClassType);
+  FEqualityComparer_ShortString3_VMT.__ClassRef  := THashFactoryClass(T.ClassType);
+  FEqualityComparer_ShortString_VMT.__ClassRef   := THashFactoryClass(T.ClassType);
+  FEqualityComparer_AnsiString_VMT.__ClassRef    := THashFactoryClass(T.ClassType);
+  FEqualityComparer_WideString_VMT.__ClassRef    := THashFactoryClass(T.ClassType);
+  FEqualityComparer_UnicodeString_VMT.__ClassRef := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Method_VMT.__ClassRef        := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Variant_VMT.__ClassRef       := THashFactoryClass(T.ClassType);
+  FEqualityComparer_Pointer_VMT.__ClassRef       := THashFactoryClass(T.ClassType);
 
   ///////
   FEqualityComparer_Int8_Instance          := @FEqualityComparer_Int8_VMT         ;
@@ -2393,41 +2328,41 @@ begin
   FEqualityComparer_Pointer_Instance       := @FEqualityComparer_Pointer_VMT      ;
 
   //////
-  FEqualityComparerInstances[tkUnknown]      := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
-  FEqualityComparerInstances[tkInteger]      := TInstance.Create(True, @THashFactory.SelectIntegerEqualityComparer);
+  FEqualityComparerInstances[tkUnknown]      := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
+  FEqualityComparerInstances[tkInteger]      := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectIntegerEqualityComparer)).Code);
   FEqualityComparerInstances[tkChar]         := TInstance.Create(False, @FEqualityComparer_UInt8_Instance);
-  FEqualityComparerInstances[tkEnumeration]  := TInstance.Create(True, @THashFactory.SelectIntegerEqualityComparer);
-  FEqualityComparerInstances[tkFloat]        := TInstance.Create(True, @THashFactory.SelectFloatEqualityComparer);
-  FEqualityComparerInstances[tkSet]          := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
+  FEqualityComparerInstances[tkEnumeration]  := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectIntegerEqualityComparer)).Code);
+  FEqualityComparerInstances[tkFloat]        := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectFloatEqualityComparer)).Code);
+  FEqualityComparerInstances[tkSet]          := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
   FEqualityComparerInstances[tkMethod]       := TInstance.Create(False, @FEqualityComparer_Method_Instance);
-  FEqualityComparerInstances[tkSString]      := TInstance.Create(True, @THashFactory.SelectShortStringEqualityComparer);
+  FEqualityComparerInstances[tkSString]      := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectShortStringEqualityComparer)).Code);
   FEqualityComparerInstances[tkLString]      := TInstance.Create(False, @FEqualityComparer_AnsiString_Instance);
   FEqualityComparerInstances[tkAString]      := TInstance.Create(False, @FEqualityComparer_AnsiString_Instance);
   FEqualityComparerInstances[tkWString]      := TInstance.Create(False, @FEqualityComparer_WideString_Instance);
   FEqualityComparerInstances[tkVariant]      := TInstance.Create(False, @FEqualityComparer_Variant_Instance);
-  FEqualityComparerInstances[tkArray]        := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
-  FEqualityComparerInstances[tkRecord]       := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
+  FEqualityComparerInstances[tkArray]        := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
+  FEqualityComparerInstances[tkRecord]       := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
   FEqualityComparerInstances[tkInterface]    := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
   FEqualityComparerInstances[tkClass]        := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
-  FEqualityComparerInstances[tkObject]       := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
+  FEqualityComparerInstances[tkObject]       := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
   FEqualityComparerInstances[tkWChar]        := TInstance.Create(False, @FEqualityComparer_UInt16_Instance);
-  FEqualityComparerInstances[tkBool]         := TInstance.Create(True, @THashFactory.SelectIntegerEqualityComparer);
+  FEqualityComparerInstances[tkBool]         := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectIntegerEqualityComparer)).Code);
   FEqualityComparerInstances[tkInt64]        := TInstance.Create(False, @FEqualityComparer_Int64_Instance);
   FEqualityComparerInstances[tkQWord]        := TInstance.Create(False, @FEqualityComparer_UInt64_Instance);
-  FEqualityComparerInstances[tkDynArray]     := TInstance.Create(True, @THashFactory.SelectDynArrayEqualityComparer);
+  FEqualityComparerInstances[tkDynArray]     := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectDynArrayEqualityComparer)).Code);
   FEqualityComparerInstances[tkInterfaceRaw] := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
   FEqualityComparerInstances[tkProcVar]      := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
   FEqualityComparerInstances[tkUString]      := TInstance.Create(False, @FEqualityComparer_UnicodeString_Instance);
   FEqualityComparerInstances[tkUChar]        := TInstance.Create(False, @FEqualityComparer_UInt16_Instance);
   FEqualityComparerInstances[tkHelper]       := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
-  FEqualityComparerInstances[tkFile]         := TInstance.Create(True, @THashFactory.SelectBinaryEqualityComparer);
+  FEqualityComparerInstances[tkFile]         := TInstance.Create(True, TMethod(TSelectMethod(THashService<T>.SelectBinaryEqualityComparer)).Code);
   FEqualityComparerInstances[tkClassRef]     := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
-  FEqualityComparerInstances[tkPointer]      := TInstance.Create(False, @FEqualityComparer_Pointer_Instance);
+  FEqualityComparerInstances[tkPointer]      := TInstance.Create(False, @FEqualityComparer_Pointer_Instance)
 end;
 
-{ TExtendedHashFactory }
+{ TExtendedHashService }
 
-function TExtendedHashFactory.SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function TExtendedHashService<T>.SelectIntegerEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   case ATypeData.OrdType of
     otSByte:
@@ -2448,7 +2383,7 @@ begin
   end;
 end;
 
-function TExtendedHashFactory.SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
+class function TExtendedHashService<T>.SelectFloatEqualityComparer(ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   case ATypeData.FloatType of
     ftSingle:
@@ -2467,7 +2402,7 @@ begin
   end;
 end;
 
-function TExtendedHashFactory.SelectShortStringEqualityComparer(ATypeData: PTypeData;
+class function TExtendedHashService<T>.SelectShortStringEqualityComparer(ATypeData: PTypeData;
   ASize: SizeInt): Pointer;
 begin
   case ASize of
@@ -2479,7 +2414,7 @@ begin
   end
 end;
 
-function TExtendedHashFactory.SelectBinaryEqualityComparer(ATypeData: PTypeData;
+class function TExtendedHashService<T>.SelectBinaryEqualityComparer(ATypeData: PTypeData;
   ASize: SizeInt): Pointer;
 begin
   case ASize of
@@ -2494,13 +2429,13 @@ begin
   end;
 end;
 
-function TExtendedHashFactory.SelectDynArrayEqualityComparer(
+class function TExtendedHashService<T>.SelectDynArrayEqualityComparer(
   ATypeData: PTypeData; ASize: SizeInt): Pointer;
 begin
   Result := CreateInterface(@FExtendedEqualityComparer_DynArray_VMT, ATypeData.elSize);
 end;
 
-function TExtendedHashFactory.LookupExtendedEqualityComparer(
+class function TExtendedHashService<T>.LookupExtendedEqualityComparer(
   ATypeInfo: PTypeInfo; ASize: SizeInt): Pointer;
 var
   LInstance: PInstance;
@@ -2521,10 +2456,8 @@ begin
   end;
 end;
 
-constructor TExtendedHashFactory.Create;
+class constructor TExtendedHashService<T>.Create;
 begin
-  inherited Create;
-
   FExtendedEqualityComparer_Int8_VMT          := ExtendedEqualityComparer_Int8_VMT         ;
   FExtendedEqualityComparer_Int16_VMT         := ExtendedEqualityComparer_Int16_VMT        ;
   FExtendedEqualityComparer_Int32_VMT         := ExtendedEqualityComparer_Int32_VMT        ;
@@ -2553,32 +2486,32 @@ begin
   FExtendedEqualityComparer_Pointer_VMT       := ExtendedEqualityComparer_Pointer_VMT      ;
 
   /////
-  FExtendedEqualityComparer_Int8_VMT.__ClassRef          := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Int16_VMT.__ClassRef         := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Int32_VMT.__ClassRef         := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Int64_VMT.__ClassRef         := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_UInt8_VMT.__ClassRef         := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_UInt16_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_UInt32_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_UInt64_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Single_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Double_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Extended_VMT.__ClassRef      := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Currency_VMT.__ClassRef      := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Comp_VMT.__ClassRef          := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Binary_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_DynArray_VMT.__ClassRef      := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Class_VMT.__ClassRef         := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_ShortString1_VMT.__ClassRef  := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_ShortString2_VMT.__ClassRef  := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_ShortString3_VMT.__ClassRef  := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_ShortString_VMT.__ClassRef   := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_AnsiString_VMT.__ClassRef    := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_WideString_VMT.__ClassRef    := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_UnicodeString_VMT.__ClassRef := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Method_VMT.__ClassRef        := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Variant_VMT.__ClassRef       := TExtendedHashFactoryClass(Self.ClassType);
-  FExtendedEqualityComparer_Pointer_VMT.__ClassRef       := TExtendedHashFactoryClass(Self.ClassType);
+  FExtendedEqualityComparer_Int8_VMT.__ClassRef          := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Int16_VMT.__ClassRef         := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Int32_VMT.__ClassRef         := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Int64_VMT.__ClassRef         := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_UInt8_VMT.__ClassRef         := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_UInt16_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_UInt32_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_UInt64_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Single_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Double_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Extended_VMT.__ClassRef      := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Currency_VMT.__ClassRef      := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Comp_VMT.__ClassRef          := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Binary_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_DynArray_VMT.__ClassRef      := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Class_VMT.__ClassRef         := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_ShortString1_VMT.__ClassRef  := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_ShortString2_VMT.__ClassRef  := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_ShortString3_VMT.__ClassRef  := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_ShortString_VMT.__ClassRef   := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_AnsiString_VMT.__ClassRef    := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_WideString_VMT.__ClassRef    := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_UnicodeString_VMT.__ClassRef := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Method_VMT.__ClassRef        := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Variant_VMT.__ClassRef       := TExtendedHashFactoryClass(T.ClassType);
+  FExtendedEqualityComparer_Pointer_VMT.__ClassRef       := TExtendedHashFactoryClass(T.ClassType);
 
   ///////
   FExtendedEqualityComparer_Int8_Instance          := @FExtendedEqualityComparer_Int8_VMT         ;
@@ -2608,34 +2541,34 @@ begin
   FExtendedEqualityComparer_Pointer_Instance       := @FExtendedEqualityComparer_Pointer_VMT      ;
 
   //////
-  FExtendedEqualityComparerInstances[tkUnknown]      := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
-  FExtendedEqualityComparerInstances[tkInteger]      := TInstance.Create(True, @TExtendedHashFactory.SelectIntegerEqualityComparer);
+  FExtendedEqualityComparerInstances[tkUnknown]      := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
+  FExtendedEqualityComparerInstances[tkInteger]      := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectIntegerEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkChar]         := TInstance.Create(False, @FExtendedEqualityComparer_UInt8_Instance);
-  FExtendedEqualityComparerInstances[tkEnumeration]  := TInstance.Create(True, @TExtendedHashFactory.SelectIntegerEqualityComparer);
-  FExtendedEqualityComparerInstances[tkFloat]        := TInstance.Create(True, @TExtendedHashFactory.SelectFloatEqualityComparer);
-  FExtendedEqualityComparerInstances[tkSet]          := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
+  FExtendedEqualityComparerInstances[tkEnumeration]  := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectIntegerEqualityComparer)).Code);
+  FExtendedEqualityComparerInstances[tkFloat]        := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectFloatEqualityComparer)).Code);
+  FExtendedEqualityComparerInstances[tkSet]          := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkMethod]       := TInstance.Create(False, @FExtendedEqualityComparer_Method_Instance);
-  FExtendedEqualityComparerInstances[tkSString]      := TInstance.Create(True, @TExtendedHashFactory.SelectShortStringEqualityComparer);
+  FExtendedEqualityComparerInstances[tkSString]      := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectShortStringEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkLString]      := TInstance.Create(False, @FExtendedEqualityComparer_AnsiString_Instance);
   FExtendedEqualityComparerInstances[tkAString]      := TInstance.Create(False, @FExtendedEqualityComparer_AnsiString_Instance);
   FExtendedEqualityComparerInstances[tkWString]      := TInstance.Create(False, @FExtendedEqualityComparer_WideString_Instance);
   FExtendedEqualityComparerInstances[tkVariant]      := TInstance.Create(False, @FExtendedEqualityComparer_Variant_Instance);
-  FExtendedEqualityComparerInstances[tkArray]        := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
-  FExtendedEqualityComparerInstances[tkRecord]       := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
+  FExtendedEqualityComparerInstances[tkArray]        := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
+  FExtendedEqualityComparerInstances[tkRecord]       := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkInterface]    := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
   FExtendedEqualityComparerInstances[tkClass]        := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
-  FExtendedEqualityComparerInstances[tkObject]       := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
+  FExtendedEqualityComparerInstances[tkObject]       := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkWChar]        := TInstance.Create(False, @FExtendedEqualityComparer_UInt16_Instance);
-  FExtendedEqualityComparerInstances[tkBool]         := TInstance.Create(True, @TExtendedHashFactory.SelectIntegerEqualityComparer);
+  FExtendedEqualityComparerInstances[tkBool]         := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectIntegerEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkInt64]        := TInstance.Create(False, @FExtendedEqualityComparer_Int64_Instance);
   FExtendedEqualityComparerInstances[tkQWord]        := TInstance.Create(False, @FExtendedEqualityComparer_UInt64_Instance);
-  FExtendedEqualityComparerInstances[tkDynArray]     := TInstance.Create(True, @TExtendedHashFactory.SelectDynArrayEqualityComparer);
+  FExtendedEqualityComparerInstances[tkDynArray]     := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectDynArrayEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkInterfaceRaw] := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
   FExtendedEqualityComparerInstances[tkProcVar]      := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
   FExtendedEqualityComparerInstances[tkUString]      := TInstance.Create(False, @FExtendedEqualityComparer_UnicodeString_Instance);
   FExtendedEqualityComparerInstances[tkUChar]        := TInstance.Create(False, @FExtendedEqualityComparer_UInt16_Instance);
   FExtendedEqualityComparerInstances[tkHelper]       := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
-  FExtendedEqualityComparerInstances[tkFile]         := TInstance.Create(True, @TExtendedHashFactory.SelectBinaryEqualityComparer);
+  FExtendedEqualityComparerInstances[tkFile]         := TInstance.Create(True, TMethod(TSelectMethod(TExtendedHashService<T>.SelectBinaryEqualityComparer)).Code);
   FExtendedEqualityComparerInstances[tkClassRef]     := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
   FExtendedEqualityComparerInstances[tkPointer]      := TInstance.Create(False, @FExtendedEqualityComparer_Pointer_Instance);
 end;
@@ -2647,12 +2580,12 @@ begin
   Result := _LookupVtableInfo(giEqualityComparer, TypeInfo(T), SizeOf(T));
 end;
 
-class function TEqualityComparer<T>.Default(AHashFactoryClass: TComparerFactoryClass): IEqualityComparer<T>;
+class function TEqualityComparer<T>.Default(AHashFactoryClass: THashFactoryClass): IEqualityComparer<T>;
 begin
-  if AHashFactoryClass.InheritsFrom(THashFactory) then
-    Result := _LookupVtableInfoEx(giEqualityComparer, TypeInfo(T), SizeOf(T), AHashFactoryClass)
-  else if AHashFactoryClass.InheritsFrom(TExtendedHashFactory) then
+  if AHashFactoryClass.InheritsFrom(TExtendedHashFactory) then
     Result := _LookupVtableInfoEx(giExtendedEqualityComparer, TypeInfo(T), SizeOf(T), AHashFactoryClass)
+  else if AHashFactoryClass.InheritsFrom(THashFactory) then
+    Result := _LookupVtableInfoEx(giEqualityComparer, TypeInfo(T), SizeOf(T), AHashFactoryClass);
 end;
 
 class function  TEqualityComparer<T>.Construct(const AEqualityComparison: TOnEqualityComparison<T>;
@@ -2831,14 +2764,9 @@ end;
 
 { TDelphiHashFactory }
 
-class constructor TDelphiHashFactory.Create;
+class function TDelphiHashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TDelphiHashFactory);
-end;
-
-class function TDelphiHashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := THashService<TDelphiHashFactory>;
 end;
 
 class function TDelphiHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
@@ -2848,14 +2776,9 @@ end;
 
 { TAdler32HashFactory }
 
-class constructor TAdler32HashFactory.Create;
+class function TAdler32HashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TAdler32HashFactory);
-end;
-
-class function TAdler32HashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := THashService<TAdler32HashFactory>;
 end;
 
 class function TAdler32HashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt;
@@ -2866,14 +2789,9 @@ end;
 
 { TSdbmHashFactory }
 
-class constructor TSdbmHashFactory.Create;
+class function TSdbmHashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TSdbmHashFactory);
-end;
-
-class function TSdbmHashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := THashService<TSdbmHashFactory>;
 end;
 
 class function TSdbmHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt;
@@ -2884,14 +2802,9 @@ end;
 
 { TSimpleChecksumFactory }
 
-class constructor TSimpleChecksumFactory.Create;
+class function TSimpleChecksumFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TSimpleChecksumFactory);
-end;
-
-class function TSimpleChecksumFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := THashService<TSimpleChecksumFactory>;
 end;
 
 class function TSimpleChecksumFactory.GetHashCode(AKey: Pointer; ASize: SizeInt;
@@ -2902,14 +2815,9 @@ end;
 
 { TDelphiDoubleHashFactory }
 
-class constructor TDelphiDoubleHashFactory.Create;
+class function TDelphiDoubleHashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TDelphiDoubleHashFactory);
-end;
-
-class function TDelphiDoubleHashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := TExtendedHashService<TDelphiDoubleHashFactory>;
 end;
 
 class function TDelphiDoubleHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
@@ -2968,14 +2876,9 @@ end;
 
 { TDelphiQuadrupleHashFactory }
 
-class constructor TDelphiQuadrupleHashFactory.Create;
+class function TDelphiQuadrupleHashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TDelphiQuadrupleHashFactory);
-end;
-
-class function TDelphiQuadrupleHashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := TExtendedHashService<TDelphiQuadrupleHashFactory>;
 end;
 
 class function TDelphiQuadrupleHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
@@ -3090,14 +2993,9 @@ end;
 
 { TDelphiSixfoldHashFactory }
 
-class constructor TDelphiSixfoldHashFactory.Create;
+class function TDelphiSixfoldHashFactory.GetHashService: THashServiceClass;
 begin
-  FID := Register(TDelphiSixfoldHashFactory);
-end;
-
-class function TDelphiSixfoldHashFactory.GetID: Integer;
-begin
-  Result := FID;
+  Result := TExtendedHashService<TDelphiSixfoldHashFactory>;
 end;
 
 class function TDelphiSixfoldHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
@@ -3240,7 +3138,7 @@ end;
 
 class constructor TOrdinalComparer<T, THashFactory>.Create;
 begin
-  if THashFactory.InheritsFrom(TExtendedHashFactory) then
+  if THashFactory.InheritsFrom(TExtendedHashService) then
   begin
     FExtendedEqualityComparer := TExtendedEqualityComparer<T>.Default(TExtendedHashFactoryClass(THashFactory));
     FEqualityComparer := IEqualityComparer<T>(FExtendedEqualityComparer);
@@ -3340,19 +3238,19 @@ begin
 end;
 
 function _LookupVtableInfoEx(AGInterface: TDefaultGenericInterface; ATypeInfo: PTypeInfo; ASize: SizeInt;
-  AFactory: TComparerFactoryClass): Pointer;
+  AFactory: THashFactoryClass): Pointer;
 begin
   case AGInterface of
     giComparer:
         Exit(
-          THashFactory.LookupComparer(ATypeInfo, ASize));
+          TComparerService.LookupComparer(ATypeInfo, ASize));
     giEqualityComparer:
       begin
         if AFactory = nil then
           AFactory := TDelphiHashFactory;
 
         Exit(
-          TComparerFactory(TComparerFactory.ComparerFactory[AFactory.GetID]).LookupEqualityComparer(ATypeInfo, ASize));
+          AFactory.GetHashService.LookupEqualityComparer(ATypeInfo, ASize));
       end;
     giExtendedEqualityComparer:
       begin
@@ -3360,7 +3258,7 @@ begin
           AFactory := TDelphiDoubleHashFactory;
 
         Exit(
-          TComparerFactory(TComparerFactory.ComparerFactory[AFactory.GetID]).LookupExtendedEqualityComparer(ATypeInfo, ASize));
+          TExtendedHashServiceClass(AFactory.GetHashService).LookupExtendedEqualityComparer(ATypeInfo, ASize));
       end;
   else
     System.Error(reRangeError);
