@@ -26,6 +26,8 @@ unit Generics.Collections;
 {$DEFINE CUCKOO_CONSTRAINTS := TKey, TValue, THashFactory, TCuckooCfg}
 {$WARNINGS OFF}
 {$HINTS OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
 
 interface
 

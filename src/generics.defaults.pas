@@ -25,6 +25,8 @@ unit Generics.Defaults;
 {$HINTS OFF}
 {$WARNINGS OFF}
 {$NOTES OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
 
 interface
 

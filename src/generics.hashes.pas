@@ -22,6 +22,8 @@ unit Generics.Hashes;
 {$POINTERMATH ON}
 {$MACRO ON}
 {$COPERATORS ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
 
 interface
 

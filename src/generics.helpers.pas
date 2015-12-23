@@ -66,9 +66,6 @@ type
   { TValueUInt32Helper }
 
   TValueUInt32Helper = record helper for UInt32
-    function High: LongInt; inline;
-    function Low: LongInt; inline;
-
     class function GetSignMask: UInt32; static; inline;
     class function GetSizedSignMask(ABits: Byte): UInt32; static; inline;
     class function GetBitsLength: Byte; static; inline;
@@ -127,16 +124,6 @@ begin
 end;
 
 { TValueUInt32Helper }
-
-function TValueUInt32Helper.High: LongInt;
-begin
-  Result := System.High(UInt32);
-end;
-
-function TValueUInt32Helper.Low: LongInt;
-begin
-  Result := System.Low(UInt32);
-end;
 
 class function TValueUInt32Helper.GetSignMask: UInt32;
 begin
