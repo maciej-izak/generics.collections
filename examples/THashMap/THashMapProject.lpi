@@ -33,7 +33,7 @@
     </RunParams>
     <Units Count="1">
       <Unit0>
-        <Filename Value="THashMapProject.lpr"/>
+        <Filename Value="thashmapproject.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
     </Units>
@@ -42,7 +42,7 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="THashMapProject"/>
+      <Filename Value="thashmapproject"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>

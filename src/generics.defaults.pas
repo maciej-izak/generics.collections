@@ -31,7 +31,7 @@ unit Generics.Defaults;
 interface
 
 uses
-  Classes, SysUtils, Contnrs, Generics.Hashes, TypInfo, Variants, Math, Generics.Strings, Generics.Helpers;
+  Classes, SysUtils, Generics.Hashes, TypInfo, Variants, Math, Generics.Strings, Generics.Helpers;
 
 type
   IComparer<T> = interface

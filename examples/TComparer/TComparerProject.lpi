@@ -33,7 +33,7 @@
     </RunParams>
     <Units Count="1">
       <Unit0>
-        <Filename Value="TComparerProject.lpr"/>
+        <Filename Value="tcomparerproject.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
     </Units>
@@ -42,7 +42,7 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="TComparerProject"/>
+      <Filename Value="tcomparerproject"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
