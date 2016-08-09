@@ -1025,11 +1025,10 @@ procedure TThreadList<T>.Add(constref AValue: T);
 begin
   LockList;
   try
-    case Duplicates of
-      dupAccept: FList.Add(AValue);
-      dupIgnore: if FList.IndexOf(AValue) = -1 then FList.Add(AValue);
-      dupError : raise EArgumentException.CreateRes(@SDuplicatesNotAllowed);
-    end;
+    if (Duplicates = dupAccept) or (FList.IndexOf(AValue) = -1) then
+      FList.Add(AValue)
+    else if Duplicates = dupError then
+      raise EArgumentException.CreateRes(@SDuplicatesNotAllowed);
   finally
     UnlockList;
   end;
