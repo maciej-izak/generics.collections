@@ -1132,7 +1132,7 @@ end;
 
 function TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TQueueDictionary.Pop: Pointer;
 var
-  AIndex, LGap: SizeInt;
+  AIndex: SizeInt;
   //LResult: TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TItem; !!!bug #25917
 begin
   AIndex := FIdx.DoRemove(FIdx.Count - 1, cnExtracted);
@@ -1346,7 +1346,7 @@ var
   y: boolean = false;
   b: UInt32;
   LIndex: UInt32;
-  i, j, LLengthMask: SizeInt;
+  i, LLengthMask: SizeInt;
   LTempItem: TItem;
   LHashList: array[0..1] of UInt32;
   LHashListParams: array[0..3] of UInt16 absolute LHashList;
@@ -1707,7 +1707,6 @@ var
   LHashList: array[0..TCuckooCfg.D] of UInt32;
   LHashListOrIndex: PUint32;
   LLookupResult: SizeInt;
-  LIndex: UInt32;
 begin
   LHashListOrIndex := @LHashList[0];
   LLookupResult := Lookup(AKey, LHashListOrIndex);
@@ -1743,7 +1742,6 @@ var
   LHashList: array[0..TCuckooCfg.D] of UInt32;
   LHashListOrIndex: PUint32;
   LLookupResult: SizeInt;
-  LIndex: UInt32;
 begin
   LHashListOrIndex := @LHashList[0];
   LLookupResult := Lookup(AKey, LHashListOrIndex);
