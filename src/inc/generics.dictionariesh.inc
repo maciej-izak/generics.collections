@@ -147,7 +147,7 @@ type
     FItems: TItemsArray;
 
     procedure Resize(ANewSize: SizeInt);
-    function PrepareAddingItem: SizeInt;
+    procedure PrepareAddingItem;
   protected
     function RealItemsLength: SizeInt; virtual;
     function Rehash(ASizePow2: SizeInt; AForce: Boolean = False): boolean; virtual;
@@ -373,7 +373,7 @@ type
 
     procedure Resize(ANewSize: SizeInt);
     procedure Rehash(ASizePow2: SizeInt);
-    function PrepareAddingItem: SizeInt;
+    procedure PrepareAddingItem;
   protected
     procedure UpdateItemsThreshold(ASize: SizeInt); override;
     function Lookup(constref AKey: TKey; var AHashListOrIndex: PUInt32): SizeInt; inline; overload;

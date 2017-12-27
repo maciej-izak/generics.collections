@@ -224,7 +224,7 @@ begin
   Result := FindBucketIndex(FItems, AKey, LHash);
 end;
 
-function TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.PrepareAddingItem: SizeInt;
+procedure TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.PrepareAddingItem;
 begin
   if RealItemsLength > FItemsThreshold then
     Rehash(Length(FItems) shl 1)
@@ -236,7 +236,6 @@ begin
   else if FItemsLength = $40000001 then // High(TIndex) ... Error: Type mismatch
     OutOfMemoryError;
 
-  Result := FItemsLength;
   Inc(FItemsLength);
 end;
 
@@ -1310,7 +1309,7 @@ begin
   Result := LR_NIL;
 end;
 
-function TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.PrepareAddingItem: SizeInt;
+procedure TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.PrepareAddingItem;
 var
   i: SizeInt;
 begin
@@ -1325,7 +1324,6 @@ begin
   else if FItemsLength = $40000001 then // High(TIndex) ... Error: Type mismatch
     OutOfMemoryError;
 
-  Result := FItemsLength;
   Inc(FItemsLength);
 end;
 
