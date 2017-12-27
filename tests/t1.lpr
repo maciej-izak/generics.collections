@@ -81,7 +81,7 @@ begin
   d1.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TOpenAddressingLP testing...');
   Check('Count', d1.Count, 0, nil, 5);
-  d1.Add(0,d1.Count);
+  d1.Add(d1.Count,d1.Count);
   Check('Item', d1[0], 0, nil, 6);
   d1.Free;
   WriteLn;
@@ -92,7 +92,7 @@ begin
   d2.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TOpenAddressingLPT testing...');
   Check('Count', d2.Count, 0, nil, 7);
-  d2.Add(0,d2.Count);
+  d2.Add(d2.Count,d2.Count);
   Check('Item', d2[0], 0, nil, 8);
   d2.Free;
   WriteLn;
@@ -103,7 +103,7 @@ begin
   d3.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TOpenAddressingQP testing...');
   Check('Count', d3.Count, 0, nil, 9);
-  d3.Add(0,d3.Count);
+  d3.Add(d3.Count,d3.Count);
   Check('Item', d3[0], 0, nil, 10);
   d3.Free;
   WriteLn;
@@ -114,7 +114,7 @@ begin
   d4.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TOpenAddressingDH testing...');
   Check('Count', d4.Count, 0, nil, 11);
-  d4.Add(0,d4.Count);
+  d4.Add(d4.Count,d4.Count);
   Check('Item', d4[0], 0, nil, 12);
   d4.Free;
   WriteLn;
@@ -125,7 +125,7 @@ begin
   d5.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TCuckooD2 testing...');
   Check('Count', d5.Count, 0, nil, 13);
-  d5.Add(0,d5.Count);
+  d5.Add(d5.Count,d5.Count);
   Check('Item', d5[0], 0, nil, 14);
   d5.Free;
   WriteLn;
@@ -136,7 +136,7 @@ begin
   d6.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TCuckooD4 testing...');
   Check('Count', d6.Count, 0, nil, 15);
-  d6.Add(0,d6.Count);
+  d6.Add(d6.Count,d6.Count);
   Check('Item', d6[0], 0, nil, 16);
   d6.Free;
   WriteLn;
@@ -147,7 +147,7 @@ begin
   d7.OnValueNotify := TFoo.NotifyValue;
   WriteLn('TCuckooD6 testing...');
   Check('Count', d7.Count, 0, nil, 17);
-  d7.Add(0,d7.Count);
+  d7.Add(d7.Count,d7.Count);
   Check('Item', d7[0], 0, nil, 18);
   d7.Free;
   WriteLn;
