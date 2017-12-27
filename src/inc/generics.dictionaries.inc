@@ -235,8 +235,6 @@ begin
   end
   else if FItemsLength = $40000001 then // High(TIndex) ... Error: Type mismatch
     OutOfMemoryError;
-
-  Inc(FItemsLength);
 end;
 
 procedure TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.UpdateItemsThreshold(ASize: SizeInt);
@@ -253,6 +251,9 @@ begin
   AItem.Hash := AHash;
   AItem.Pair.Key := AKey;
   AItem.Pair.Value := AValue;
+
+  // ! very important. FItemsLength must be increased after above code (because constref has meaning)
+  Inc(FItemsLength);
 
   PairNotify(AItem.Pair, cnAdded);
 end;
@@ -1323,8 +1324,6 @@ begin
   end
   else if FItemsLength = $40000001 then // High(TIndex) ... Error: Type mismatch
     OutOfMemoryError;
-
-  Inc(FItemsLength);
 end;
 
 procedure TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.UpdateItemsThreshold(ASize: SizeInt);
@@ -1409,10 +1408,11 @@ begin
     FQueue.InsertIntoHead(@LNewItem);
 end;
 
-procedure TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.DoAdd(constref AKey: TKey; constref AValue: TValue;
+procedure TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.DoAdd(const AKey: TKey; const AValue: TValue;
   const AHashList: PUInt32);
 begin
   AddItem(FItems, AKey, AValue, AHashList);
+  Inc(FItemsLength);
   KeyNotify(AKey, cnAdded);
   ValueNotify(AValue, cnAdded);
 end;

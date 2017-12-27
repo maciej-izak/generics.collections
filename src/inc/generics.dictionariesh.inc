@@ -412,7 +412,7 @@ type
     procedure SetItem(constref AValue: TValue; const AHashListOrIndex: PUInt32; ALookupResult: SizeInt); overload;
 
     procedure AddItem(constref AItems: TItemsDArray; constref AKey: TKey; constref AValue: TValue; const AHashList: PUInt32); overload;
-    procedure DoAdd(constref AKey: TKey; constref AValue: TValue; const AHashList: PUInt32); overload; inline;
+    procedure DoAdd(const AKey: TKey; const AValue: TValue; const AHashList: PUInt32); overload; inline;
     function DoRemove(const AHashListOrIndex: PUInt32; ALookupResult: SizeInt;
       ACollectionNotification: TCollectionNotification): TValue;
 
