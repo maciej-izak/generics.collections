@@ -1545,10 +1545,8 @@ end;
 procedure TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.Rehash(ASizePow2: SizeInt);
 var
   LNewItems: TItemsDArray;
-  LHash: UInt32;
-  LIndex: SizeInt;
   i, j: SizeInt;
-  LItem, LNewItem: PItem;
+  LItem: PItem;
   LOldQueue: TQueueDictionary;
 var
   LHashList: array[0..1] of UInt32;
