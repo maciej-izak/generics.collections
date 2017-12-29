@@ -143,27 +143,73 @@ begin
   Result := GetCurrent;
 end;
 
-{ TDictionaryEnumerable<TDictionaryEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS> }
+{ TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS> }
 
-constructor TDictionaryEnumerable<TDictionaryEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.Create(
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
+  TPointersCollection.Dictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>;
+begin
+  Result := TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>(Pointer(@Self)^);
+end;
+
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
+  TPointersCollection.{Do}GetEnumerator: TDictionaryPointersEnumerator;
+begin
+  Result := TDictionaryPointersEnumerator(TDictionaryPointersEnumerator.NewInstance);
+  TCustomDictionaryEnumerator<PT, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(Dictionary);
+end;
+
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
+  TPointersCollection.GetCount: SizeInt;
+begin
+  Result := Dictionary.Count;
+end;
+
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
+  TPointersCollection.ToArray: TArray<PT>;
+var
+  i: SizeInt;
+  LEnumerator: TDictionaryPointersEnumerator;
+begin
+  SetLength(Result, Count);
+
+  try
+    LEnumerator := GetEnumerator;
+
+    i := 0;
+    while LEnumerator.MoveNext do
+    begin
+      Result[i] := LEnumerator.Current;
+      Inc(i);
+    end;
+  finally
+    LEnumerator.Free;
+  end;
+end;
+
+constructor TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.Create(
   ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);
 begin
   FDictionary := ADictionary;
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
   DoGetEnumerator: TDictionaryEnumerator;
 begin
   Result := TDictionaryEnumerator(TDictionaryEnumerator.NewInstance);
   TCustomDictionaryEnumerator<T, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(FDictionary);
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetCount: SizeInt;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.GetCount: SizeInt;
 begin
   Result := TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>(FDictionary).Count;
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.ToArray: TArray<T>;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPointers: PPointersCollection;
+begin
+  Result := @FPointers;
+end;
+
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.ToArray: TArray<T>;
 begin
   Result := ToArrayImpl(FDictionary.Count);
 end;
@@ -302,7 +348,7 @@ var
   LIndex: SizeInt;
 begin
   LIndex := FindBucketIndex(AKey);
-  if LIndex  < 0 then
+  if LIndex < 0 then
     Exit;
 
   DoRemove(LIndex, cnRemoved);
@@ -313,7 +359,7 @@ var
   LIndex: SizeInt;
 begin
   LIndex := FindBucketIndex(AKey);
-  if LIndex  < 0 then
+  if LIndex < 0 then
     Exit(Default(TPair<TKey, TValue>));
 
   Result.Key := AKey;
@@ -555,11 +601,25 @@ begin
   Result := TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>(FDictionary).FItems[FIndex].Pair.Value;
 end;
 
+{ TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TPValueEnumerator }
+
+function TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TPValueEnumerator.GetCurrent: PValue;
+begin
+  Result := @(TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>(FDictionary).FItems[FIndex].Pair.Value);
+end;
+
 { TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TKeyEnumerator }
 
 function TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TKeyEnumerator.GetCurrent: TKey;
 begin
   Result := TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>(FDictionary).FItems[FIndex].Pair.Key;
+end;
+
+{ TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TPKeyEnumerator }
+
+function TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>.TPKeyEnumerator.GetCurrent: PKey;
+begin
+  Result := @(TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS>(FDictionary).FItems[FIndex].Pair.Key);
 end;
 
 { TOpenAddressingLP<DICTIONARY_CONSTRAINTS> }
@@ -1826,6 +1886,16 @@ begin
     Result := TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FItems[FMainIndex][FIndex].Pair.Value;
 end;
 
+{ TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TPValueEnumerator }
+
+function TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TPValueEnumerator.GetCurrent: PValue;
+begin
+  if FMainIndex = TCuckooCfg.D then
+    Result := @(TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FQueue.FItems[FIndex].Pair.Value.Pair.Value)
+  else
+    Result := @(TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FItems[FMainIndex][FIndex].Pair.Value);
+end;
+
 { TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TKeyEnumerator }
 
 function TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TKeyEnumerator.GetCurrent: TKey;
@@ -1834,6 +1904,16 @@ begin
     Result := TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FQueue.FItems[FIndex].Pair.Value.Pair.Key
   else
     Result := TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FItems[FMainIndex][FIndex].Pair.Key;
+end;
+
+{ TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TPKeyEnumerator }
+
+function TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>.TPKeyEnumerator.GetCurrent: TKey;
+begin
+  if FMainIndex = TCuckooCfg.D then
+    Result := @(TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FQueue.FItems[FIndex].Pair.Value.Pair.Key)
+  else
+    Result := @(TDeamortizedDArrayCuckooMap<CUCKOO_CONSTRAINTS>(FDictionary).FItems[FMainIndex][FIndex].Pair.Key);
 end;
 
 { TObjectDictionary<DICTIONARY_CONSTRAINTS> }
