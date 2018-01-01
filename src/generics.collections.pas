@@ -32,7 +32,7 @@ unit Generics.Collections;
 interface
 
 uses
-    Classes, SysUtils, Generics.MemoryExpanders, Generics.Defaults,
+    RtlConsts, Classes, SysUtils, Generics.MemoryExpanders, Generics.Defaults,
     Generics.Helpers, Generics.Strings;
 
 { FPC BUGS related to Generics.* (54 bugs, 19 fixed)
@@ -57,12 +57,19 @@ uses
 {.$define EXTRA_WARNINGS}
 
 type
+  TDuplicates = Classes.TDuplicates;
+
   {$ifdef VER3_0_0}
   TArray<T> = array of T;
   {$endif}
 
   // bug #24254 workaround
   // should be TArray = record class procedure Sort<T>(...) etc.
+  TBinarySearchResult = record
+    FoundIndex, CandidateIndex: SizeInt;
+    CompareResult: SizeInt;
+  end;
+
   TCustomArrayHelper<T> = class abstract
   private
     type
@@ -80,12 +87,19 @@ type
       const AComparer: IComparer<T>; AIndex, ACount: SizeInt); overload;
 
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
-      out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+      out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>;
       AIndex, ACount: SizeInt): Boolean; virtual; abstract; overload;
+    class function BinarySearch(constref AValues: array of T; constref AItem: T;
+      out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+      AIndex, ACount: SizeInt): Boolean; overload;
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
       out AFoundIndex: SizeInt; const AComparer: IComparer<T>): Boolean; overload;
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
       out AFoundIndex: SizeInt): Boolean; overload;
+    class function BinarySearch(constref AValues: array of T; constref AItem: T;
+      out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>): Boolean; overload;
+    class function BinarySearch(constref AValues: array of T; constref AItem: T;
+      out ASearchResult: TBinarySearchResult): Boolean; overload;
   end {$ifdef EXTRA_WARNINGS}experimental{$endif}; // will be renamed to TCustomArray (bug #24254)
 
   TArrayHelper<T> = class(TCustomArrayHelper<T>)
@@ -94,7 +108,7 @@ type
     class procedure QuickSort(var AValues: array of T; ALeft, ARight: SizeInt; const AComparer: IComparer<T>); override;
   public
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
-      out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+      out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>;
       AIndex, ACount: SizeInt): Boolean; override; overload;
   end {$ifdef EXTRA_WARNINGS}experimental{$endif}; // will be renamed to TArray (bug #24254)
 
@@ -230,6 +244,8 @@ type
   protected
     procedure SetCapacity(AValue: SizeInt); override;
     procedure SetCount(AValue: SizeInt);
+    procedure InitializeList; virtual;
+    procedure InternalInsert(AIndex: SizeInt; constref AValue: T);
   private
     function GetItem(AIndex: SizeInt): T;
     procedure SetItem(AIndex: SizeInt; const AValue: T);
@@ -239,13 +255,13 @@ type
     constructor Create(ACollection: TEnumerable<T>); overload;
     destructor Destroy; override;
 
-    function Add(constref AValue: T): SizeInt;
-    procedure AddRange(constref AValues: array of T); overload;
+    function Add(constref AValue: T): SizeInt; virtual;
+    procedure AddRange(constref AValues: array of T); virtual; overload;
     procedure AddRange(const AEnumerable: IEnumerable<T>); overload;
     procedure AddRange(AEnumerable: TEnumerable<T>); overload;
 
-    procedure Insert(AIndex: SizeInt; constref AValue: T);
-    procedure InsertRange(AIndex: SizeInt; constref AValues: array of T); overload;
+    procedure Insert(AIndex: SizeInt; constref AValue: T); virtual;
+    procedure InsertRange(AIndex: SizeInt; constref AValues: array of T); virtual; overload;
     procedure InsertRange(AIndex: SizeInt; const AEnumerable: IEnumerable<T>); overload;
     procedure InsertRange(AIndex: SizeInt; const AEnumerable: TEnumerable<T>); overload;
 
@@ -255,8 +271,8 @@ type
     function ExtractIndex(const AIndex: SizeInt): T; overload;
     function Extract(constref AValue: T): T; overload;
 
-    procedure Exchange(AIndex1, AIndex2: SizeInt);
-    procedure Move(AIndex, ANewIndex: SizeInt);
+    procedure Exchange(AIndex1, AIndex2: SizeInt); virtual;
+    procedure Move(AIndex, ANewIndex: SizeInt); virtual;
 
     function First: T; inline;
     function Last: T; inline;
@@ -278,6 +294,30 @@ type
 
     property Count: SizeInt read FItems.FLength write SetCount;
     property Items[Index: SizeInt]: T read GetItem write SetItem; default;
+  end;
+
+  TCollectionSortStyle = (cssNone,cssUser,cssAuto);
+  TCollectionSortStyles = Set of TCollectionSortStyle;
+
+  TSortedList<T> = class(TList<T>)
+  private
+    FDuplicates: TDuplicates;
+    FSortStyle: TCollectionSortStyle;
+    function GetSorted: boolean;
+    procedure SetSorted(AValue: boolean);
+    procedure SetSortStyle(AValue: TCollectionSortStyle);
+  protected
+    procedure InitializeList; override;
+  public
+    function Add(constref AValue: T): SizeInt; override; overload;
+    procedure AddRange(constref AValues: array of T); override; overload;
+    procedure Insert(AIndex: SizeInt; constref AValue: T); override;
+    procedure InsertRange(AIndex: SizeInt; constref AValues: array of T); override; overload;
+    property Duplicates: TDuplicates read FDuplicates write FDuplicates;
+    property Sorted: Boolean read GetSorted write SetSorted;
+    property SortStyle: TCollectionSortStyle read FSortStyle write SetSortStyle;
+
+    function ConsistencyCheck(ARaiseException: boolean = true): boolean; virtual;
   end;
 
   TThreadList<T> = class
@@ -399,7 +439,7 @@ type
 
   THashSet<T> = class(TEnumerable<T>)
   protected
-    FInternalDictionary : TDictionary<T, TEmptyRecord>;
+    FInternalDictionary : TOpenAddressingLP<T, TEmptyRecord>;
     function DoGetEnumerator: TEnumerator<T>; override;
   public type
     TSetEnumerator = class(TEnumerator<T>)
@@ -421,8 +461,8 @@ type
 
     function GetEnumerator: TEnumerator; reintroduce;
   public
-    constructor Create; overload;
-    constructor Create(const AComparer: IEqualityComparer<T>); overload;
+    constructor Create; virtual; overload;
+    constructor Create(const AComparer: IEqualityComparer<T>); virtual; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
     destructor Destroy; override;
     function Add(constref AValue: T): Boolean;
@@ -454,6 +494,16 @@ end;
 
 { TCustomArrayHelper<T> }
 
+
+class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
+  out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+  AIndex, ACount: SizeInt): Boolean;
+var
+  LSearchResult: TBinarySearchResult;
+begin
+  Result := BinarySearch(AValues, AItem, LSearchResult, AComparer, Low(AValues), Length(AValues));
+end;
+
 class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
   out AFoundIndex: SizeInt; const AComparer: IComparer<T>): Boolean;
 begin
@@ -464,6 +514,18 @@ class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; 
   out AFoundIndex: SizeInt): Boolean;
 begin
   Result := BinarySearch(AValues, AItem, AFoundIndex, TComparerBugHack.Default, Low(AValues), Length(AValues));
+end;
+
+class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
+  out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>): Boolean;
+begin
+  Result := BinarySearch(AValues, AItem, ASearchResult, AComparer, Low(AValues), Length(AValues));
+end;
+
+class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
+  out ASearchResult: TBinarySearchResult): Boolean;
+begin
+  Result := BinarySearch(AValues, AItem, ASearchResult, TComparerBugHack.Default, Low(AValues), Length(AValues));
 end;
 
 class procedure TCustomArrayHelper<T>.Sort(var AValues: array of T);
@@ -535,11 +597,10 @@ begin
 end;
 
 class function TArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
-  out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+  out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>;
   AIndex, ACount: SizeInt): Boolean;
 var
   imin, imax, imid: Int32;
-  LCompare: SizeInt;
 begin
   // continually narrow search until just one element remains
   imin := AIndex;
@@ -554,16 +615,17 @@ begin
         // assert(imid < imax);
         // note: 0 <= imin < imax implies imid will always be less than imax
 
-        LCompare := AComparer.Compare(AValues[imid], AItem);
+        ASearchResult.CompareResult := AComparer.Compare(AValues[imid], AItem);
         // reduce the search
-        if (LCompare < 0) then
+        if (ASearchResult.CompareResult < 0) then
           imin := imid + 1
         else
         begin
           imax := imid;
-          if LCompare = 0 then
+          if ASearchResult.CompareResult = 0 then
           begin
-            AFoundIndex := imid;
+            ASearchResult.FoundIndex := imid;
+            ASearchResult.CandidateIndex := imid;
             Exit(True);
           end;
         end;
@@ -574,15 +636,25 @@ begin
 
     // deferred test for equality
 
-  LCompare := AComparer.Compare(AValues[imin], AItem);
-  if (imax = imin) and (LCompare = 0) then
+  if (imax = imin) then
   begin
-    AFoundIndex := imin;
-    Exit(True);
+    ASearchResult.CompareResult := AComparer.Compare(AValues[imin], AItem);
+    ASearchResult.CandidateIndex := imin;
+    if (ASearchResult.CompareResult = 0) then
+    begin
+      ASearchResult.FoundIndex := imin;
+      Exit(True);
+    end else
+    begin
+      ASearchResult.FoundIndex := -1;
+      Exit(False);
+    end;
   end
   else
   begin
-    AFoundIndex := -1;
+    ASearchResult.CompareResult := 0;
+    ASearchResult.FoundIndex := -1;
+    ASearchResult.CandidateIndex := -1;
     Exit(False);
   end;
 end;
@@ -826,13 +898,19 @@ end;
 
 { TList<T> }
 
+procedure TList<T>.InitializeList;
+begin
+end;
+
 constructor TList<T>.Create;
 begin
+  InitializeList;
   FComparer := TComparer<T>.Default;
 end;
 
 constructor TList<T>.Create(const AComparer: IComparer<T>);
 begin
+  InitializeList;
   FComparer := AComparer;
 end;
 
@@ -926,11 +1004,8 @@ begin
     Add(LValue);
 end;
 
-procedure TList<T>.Insert(AIndex: SizeInt; constref AValue: T);
+procedure TList<T>.InternalInsert(AIndex: SizeInt; constref AValue: T);
 begin
-  if (AIndex < 0) or (AIndex > Count) then
-    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
-
   if AIndex <> PrepareAddingItem then
   begin
     System.Move(FItems.FItems[AIndex], FItems.FItems[AIndex + 1], ((Count - AIndex) - 1) * SizeOf(T));
@@ -939,6 +1014,14 @@ begin
 
   FItems.FItems[AIndex] := AValue;
   Notify(AValue, cnAdded);
+end;
+
+procedure TList<T>.Insert(AIndex: SizeInt; constref AValue: T);
+begin
+  if (AIndex < 0) or (AIndex > Count) then
+    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+
+  InternalInsert(AIndex, AValue);
 end;
 
 procedure TList<T>.InsertRange(AIndex: SizeInt; constref AValues: array of T);
@@ -1166,12 +1249,118 @@ end;
 
 function TList<T>.BinarySearch(constref AItem: T; out AIndex: SizeInt): Boolean;
 begin
-  Result := TArrayHelperBugHack.BinarySearch(FItems.FItems, AItem, AIndex);
+  Result := TArrayHelperBugHack.BinarySearch(FItems.FItems, AItem, AIndex, FComparer, 0, Count);
 end;
 
 function TList<T>.BinarySearch(constref AItem: T; out AIndex: SizeInt; const AComparer: IComparer<T>): Boolean;
 begin
-  Result := TArrayHelperBugHack.BinarySearch(FItems.FItems, AItem, AIndex, AComparer);
+  Result := TArrayHelperBugHack.BinarySearch(FItems.FItems, AItem, AIndex, AComparer, 0, Count);
+end;
+
+{ TSortedList<T> }
+
+procedure TSortedList<T>.InitializeList;
+begin
+  FSortStyle := cssAuto;
+end;
+
+function TSortedList<T>.Add(constref AValue: T): SizeInt;
+var
+  LSearchResult: TBinarySearchResult;
+begin
+  if SortStyle <> cssAuto then
+    Exit(inherited Add(AValue));
+  if TArrayHelperBugHack.BinarySearch(FItems.FItems, AValue, LSearchResult, FComparer, 0, Count) then
+  case FDuplicates of
+    dupAccept: Result := LSearchResult.FoundIndex;
+    dupIgnore: Exit(LSearchResult.FoundIndex);
+    dupError: raise EListError.Create(SCollectionDuplicate);
+  end
+  else
+  begin
+    if LSearchResult.CandidateIndex = -1 then
+      Result := 0
+    else
+      if LSearchResult.CompareResult > 0 then
+        Result := LSearchResult.CandidateIndex
+      else
+        Result := LSearchResult.CandidateIndex + 1;
+  end;
+
+  InternalInsert(Result, AValue);
+end;
+
+procedure TSortedList<T>.Insert(AIndex: SizeInt; constref AValue: T);
+begin
+  if FSortStyle = cssAuto then
+    raise EListError.Create(SSortedListError)
+  else
+    inherited;
+end;
+
+procedure TSortedList<T>.AddRange(constref AValues: array of T);
+var
+  i: T;
+begin
+  for i in AValues do
+    Add(i);
+end;
+
+procedure TSortedList<T>.InsertRange(AIndex: SizeInt; constref AValues: array of T);
+var
+  i: T;
+begin
+  for i in AValues do
+    Insert(AIndex, i);
+end;
+
+function TSortedList<T>.GetSorted: boolean;
+begin
+  Result := FSortStyle in [cssAuto, cssUser];
+end;
+
+procedure TSortedList<T>.SetSorted(AValue: boolean);
+begin
+  if AValue then
+    SortStyle := cssAuto
+  else
+    SortStyle := cssNone;
+end;
+
+procedure TSortedList<T>.SetSortStyle(AValue: TCollectionSortStyle);
+begin
+  if FSortStyle = AValue then
+    Exit;
+  if AValue = cssAuto then
+    Sort;
+  FSortStyle := AValue;
+end;
+
+function TSortedList<T>.ConsistencyCheck(ARaiseException: boolean = true): boolean;
+var
+  i: Integer;
+  LCompare: SizeInt;
+begin
+  if Sorted then
+  for i := 0 to Count-2 do
+  begin
+    LCompare := FComparer.Compare(FItems.FItems[i], FItems.FItems[i+1]);
+    if LCompare = 0 then
+    begin
+      if Duplicates <> dupAccept then
+        if ARaiseException then
+          raise EListError.Create(SCollectionDuplicate)
+        else
+          Exit(False)
+    end
+    else
+      if LCompare > 0 then
+        if ARaiseException then
+          raise EListError.Create(SCollectionInconsistency)
+        else
+          Exit(False)
+  end;
+  Result := True;
 end;
 
 { TThreadList<T> }
@@ -1579,12 +1768,12 @@ end;
 
 constructor THashSet<T>.Create;
 begin
-  FInternalDictionary := TDictionary<T, TEmptyRecord>.Create;
+  FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create;
 end;
 
 constructor THashSet<T>.Create(const AComparer: IEqualityComparer<T>);
 begin
-  FInternalDictionary := TDictionary<T, TEmptyRecord>.Create(AComparer);
+  FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create(AComparer);
 end;
 
 constructor THashSet<T>.Create(ACollection: TEnumerable<T>);
