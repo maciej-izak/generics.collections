@@ -1063,7 +1063,7 @@ begin
   i := 0;
   for LValue in AEnumerable do
   begin
-    Insert(Aindex + i, LValue);
+    InternalInsert(Aindex + i, LValue);
     Inc(i);
   end;
 end;
@@ -1079,7 +1079,7 @@ begin
   i := 0;
   for LValue in AEnumerable do
   begin
-    Insert(Aindex + i, LValue);
+    InternalInsert(Aindex + i, LValue);
     Inc(i);
   end;
 end;
@@ -1308,10 +1308,18 @@ end;
 
 procedure TSortedList<T>.InsertRange(AIndex: SizeInt; constref AValues: array of T);
 var
-  i: T;
+  LValue: T;
+  i:  SizeInt;
 begin
-  for i in AValues do
-    Insert(AIndex, i);
+  if (AIndex < 0) or (AIndex > Count) then
+    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+
+  i := 0;
+  for LValue in AValues do
+  begin
+    InternalInsert(AIndex + i, LValue);
+    Inc(i);
+  end;
 end;
 
 function TSortedList<T>.GetSorted: boolean;
