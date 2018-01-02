@@ -312,6 +312,8 @@ type
     function Add(constref AValue: T): SizeInt; override; overload;
     procedure AddRange(constref AValues: array of T); override; overload;
     procedure Insert(AIndex: SizeInt; constref AValue: T); override;
+    procedure Exchange(AIndex1, AIndex2: SizeInt); override;
+    procedure Move(AIndex, ANewIndex: SizeInt); override;
     procedure InsertRange(AIndex: SizeInt; constref AValues: array of T); override; overload;
     property Duplicates: TDuplicates read FDuplicates write FDuplicates;
     property Sorted: Boolean read GetSorted write SetSorted;
@@ -1291,6 +1293,22 @@ begin
 end;
 
 procedure TSortedList<T>.Insert(AIndex: SizeInt; constref AValue: T);
+begin
+  if FSortStyle = cssAuto then
+    raise EListError.Create(SSortedListError)
+  else
+    inherited;
+end;
+
+procedure TSortedList<T>.Exchange(AIndex1, AIndex2: SizeInt);
+begin
+  if FSortStyle = cssAuto then
+    raise EListError.Create(SSortedListError)
+  else
+    inherited;
+end;
+
+procedure TSortedList<T>.Move(AIndex, ANewIndex: SizeInt);
 begin
   if FSortStyle = cssAuto then
     raise EListError.Create(SSortedListError)
