@@ -218,8 +218,9 @@ type
   TCustomListWithPointers<T> = class(TCustomList<T>)
   private type
     TPointersEnumerator = class(TCustomListPointersEnumerator<T, PT>);
-    PPointersCollection = ^TPointersCollection;
     TPointersCollection = TCustomListPointersCollection<TPointersEnumerator, T, PT>;
+  public type
+    PPointersCollection = ^TPointersCollection;
   private
     function GetPointers: PPointersCollection; inline;
   public
@@ -373,8 +374,9 @@ type
   TQueue<T> = class(TCustomList<T>)
   private type
     TPointersEnumerator = class(TQueuePointersEnumerator<T, PT>);
-    PPointersCollection = ^TPointersCollection;
     TPointersCollection = TQueuePointersCollection<TPointersEnumerator, T, PT>;
+  public type
+    PPointersCollection = ^TPointersCollection;
   private
     function GetPointers: PPointersCollection; inline;
   protected

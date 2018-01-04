@@ -114,7 +114,6 @@ type
   TDictionaryEnumerable<TDictionaryEnumerator: TObject; TDictionaryPointersEnumerator, // ... inherits from TCustomDictionaryEnumerator. workaround...
     T, PT, CUSTOM_DICTIONARY_CONSTRAINTS> = class abstract(TEnumerable<T>)
   private type
-    PPointersCollection = ^TPointersCollection;
     TPointersCollection = record
     private
       function Dictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>; inline;
@@ -124,6 +123,8 @@ type
       function ToArray: TArray<PT>;
       property Count: SizeInt read GetCount;
     end;
+  public type
+    PPointersCollection = ^TPointersCollection;
   private
     FPointers: TPointersCollection;
     FDictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>;
@@ -181,8 +182,9 @@ type
 
     TItemsArray = array of TItem;
     TPointersEnumerator = class(TOpenAddressingPointersEnumerator<TItem, PDictionaryPair>);
-    PPointersCollection = ^TPointersCollection;
     TPointersCollection = TOpenAddressingPointersCollection<TPointersEnumerator, TItem, PDictionaryPair>;
+  public type
+    PPointersCollection = ^TPointersCollection;
   private var // FItems must be declared as first field 
     FItems: TItemsArray;
     FItemsThreshold: SizeInt;
@@ -438,8 +440,9 @@ type
     TItemsArray = array of TItem;
     TItemsDArray = array[0..Pred(TCuckooCfg.D)] of TItemsArray;
     TPointersEnumerator = class(TDeamortizedDArrayPointersEnumerator<TCuckooCfg, TItemsArray, TItemsDArray, TQueueDictionary, PDictionaryPair>);
-    PPointersCollection = ^TPointersCollection;
     TPointersCollection = TDeamortizedDArrayPointersCollection<TPointersEnumerator, TItemsDArray, TQueueDictionary, PDictionaryPair>;
+  public type
+    PPointersCollection = ^TPointersCollection;
   private var
     FItems: TItemsDArray;
     FQueue: TQueueDictionary;  // probably can be optimized - hash TItem give information from TItem.Hash for cuckoo ...
