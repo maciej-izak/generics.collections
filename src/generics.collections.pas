@@ -144,6 +144,8 @@ type
   {$DEFINE CUSTOM_LIST_CAPACITY_INC := Result + Result div 2} // ~approximation to golden ratio: n = n * 1.5 }
   // {$DEFINE CUSTOM_LIST_CAPACITY_INC := Result * 2} // standard inc
   TCustomList<T> = class abstract(TEnumerable<T>)
+  public type
+    PT = ^T;
   protected
     type // bug #24282
       TArrayHelperBugHack = TArrayHelper<T>;
@@ -214,8 +216,6 @@ type
   end;
 
   TCustomListWithPointers<T> = class(TCustomList<T>)
-  public type
-    PT = ^T;
   private type
     TPointersEnumerator = class(TCustomListPointersEnumerator<T, PT>);
     PPointersCollection = ^TPointersCollection;
@@ -341,7 +341,42 @@ type
     property Duplicates: TDuplicates read FDuplicates write FDuplicates;
   end;
 
+  TQueuePointersEnumerator<T, PT> = class abstract(TEnumerator<PT>)
+  private type
+    TList = TCustomList<T>; // lazarus bug workaround
+  private var
+    FList: TList.PItems;
+    FIndex: SizeInt;
+  protected
+    function DoMoveNext: boolean; override;
+    function DoGetCurrent: PT; override;
+    function GetCurrent: PT; virtual;
+  public
+    constructor Create(AList: TList.PItems; ALow: SizeInt);
+  end;
+
+  TQueuePointersCollection<TPointersEnumerator, T, PT> = record
+  private type
+    TList = TCustomList<T>; // lazarus bug workaround
+  private
+    function List: TList.PItems; inline;
+    function GetLow: SizeInt; inline;
+    function GetCount: SizeInt; inline;
+    function GetItem(AIndex: SizeInt): PT;
+  public
+    function GetEnumerator: TPointersEnumerator;
+    function ToArray: TArray<PT>;
+    property Count: SizeInt read GetCount;
+    property Items[Index: SizeInt]: PT read GetItem; default;
+  end;
+
   TQueue<T> = class(TCustomList<T>)
+  private type
+    TPointersEnumerator = class(TQueuePointersEnumerator<T, PT>);
+    PPointersCollection = ^TPointersCollection;
+    TPointersCollection = TQueuePointersCollection<TPointersEnumerator, T, PT>;
+  private
+    function GetPointers: PPointersCollection; inline;
   protected
     // bug #24287 - workaround for generics type name conflict (Identifier not found)
     // next bug workaround - for another error related to previous workaround
@@ -370,6 +405,7 @@ type
     function Peek: T;
     procedure Clear;
     procedure TrimExcess;
+    property Ptr: PPointersCollection read GetPointers;
   end;
 
   TStack<T> = class(TCustomListWithPointers<T>)
@@ -1463,6 +1499,83 @@ begin
 {$endif}
 end;
 
+{ TQueuePointersEnumerator<T, PT> }
+
+function TQueuePointersEnumerator<T, PT>.DoMoveNext: boolean;
+begin
+  Inc(FIndex);
+  Result := (FList.FLength <> 0) and (FIndex < FList.FLength)
+end;
+
+function TQueuePointersEnumerator<T, PT>.DoGetCurrent: PT;
+begin
+  Result := GetCurrent;
+end;
+
+function TQueuePointersEnumerator<T, PT>.GetCurrent: PT;
+begin
+  Result := @FList.FItems[FIndex];
+end;
+
+constructor TQueuePointersEnumerator<T, PT>.Create(AList: TList.PItems; ALow: SizeInt);
+begin
+  inherited Create;
+  FIndex := Pred(ALow);
+  FList := AList;
+end;
+
+{ TQueuePointersCollection<TPointersEnumerator, T, PT> }
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.List: TList.PItems;
+begin
+  Result := @(TCustomList<T>.TItems(Pointer(@Self)^));
+end;
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetLow: SizeInt;
+begin
+  Result := PSizeInt(PByte(@((@Self)^))+SizeOf(TCustomList<T>.TItems))^;
+end;
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetCount: SizeInt;
+begin
+  Result := List.FLength;
+end;
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetItem(AIndex: SizeInt): PT;
+begin
+  Result := @List.FItems[AIndex + GetLow];
+end;
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetEnumerator: TPointersEnumerator;
+begin
+  Result := TPointersEnumerator(TPointersEnumerator.NewInstance);
+  TPointersEnumerator(Result).Create(List, GetLow);
+end;
+
+function TQueuePointersCollection<TPointersEnumerator, T, PT>.ToArray: TArray<PT>;
+{begin
+  Result := ToArrayImpl(FList.Count);
+end;}
+var
+  i: SizeInt;
+  LEnumerator: TPointersEnumerator;
+begin
+  SetLength(Result, Count);
+
+  try
+    LEnumerator := GetEnumerator;
+
+    i := 0;
+    while LEnumerator.MoveNext do
+    begin
+      Result[i] := LEnumerator.Current;
+      Inc(i);
+    end;
+  finally
+    LEnumerator.Free;
+  end;
+end;
+
 { TQueue<T>.TEnumerator }
 
 constructor TQueue<T>.TEnumerator.Create(AQueue: TQueue<T>);
@@ -1473,6 +1586,11 @@ begin
 end;
 
 { TQueue<T> }
+
+function TQueue<T>.GetPointers: PPointersCollection;
+begin
+  Result := PPointersCollection(@FItems);
+end;
 
 function TQueue<T>.GetEnumerator: TEnumerator;
 begin

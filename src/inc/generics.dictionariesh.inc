@@ -44,8 +44,7 @@ type
     PKey = ^TKey;
     PValue = ^TValue;
     THashFactoryClass = THashFactory;
-  public
-    FItemsLength: SizeInt;
+  protected
     FEqualityComparer: IEqualityComparer<TKey>;
     FKeys: TEnumerable<TKey>;
     FValues: TEnumerable<TValue>;
@@ -62,8 +61,6 @@ type
     property MaxLoadFactor: single read FMaxLoadFactor write SetMaxLoadFactor;
     property LoadFactor: single read GetLoadFactor;
     property Capacity: SizeInt read GetCapacity write SetCapacity;
-
-    property Count: SizeInt read FItemsLength;
 
     procedure Clear; virtual; abstract;
     procedure Add(constref APair: TPair<TKey, TValue>); virtual; abstract;
@@ -93,6 +90,10 @@ type
   public
     property OnKeyNotify: TCollectionNotifyEvent<TKey> read FOnKeyNotify write FOnKeyNotify;
     property OnValueNotify: TCollectionNotifyEvent<TValue> read FOnValueNotify write FOnValueNotify;
+  protected // FItemsLength must be declared at the end of TCustomDictionary
+    FItemsLength: SizeInt;
+  public
+    property Count: SizeInt read FItemsLength;
   end;
 
   { TCustomDictionaryEnumerator }
@@ -145,6 +146,29 @@ type
     function DoMoveNext: Boolean; override;
   end;
 
+  TOpenAddressingPointersEnumerator<TItem, PDictionaryPair> = class abstract(TEnumerator<PDictionaryPair>)
+  private var
+    FItems: ^TArray<TItem>;
+    FIndex: SizeInt;
+  protected
+    function DoMoveNext: boolean; override;
+    function DoGetCurrent: PDictionaryPair; override;
+    function GetCurrent: PDictionaryPair; virtual;
+  public
+    constructor Create(var AItems);
+  end;
+
+  TOpenAddressingPointersCollection<TPointersEnumerator, TItem, PDictionaryPair> = record
+  private type
+    PArray = ^TArray<TItem>;
+    function Items: PArray; inline;
+    function GetCount: SizeInt; inline;
+  public
+    function GetEnumerator: TPointersEnumerator;
+    function ToArray: TArray<PDictionaryPair>;
+    property Count: SizeInt read GetCount;
+  end;
+
   TOnGetMemoryLayoutKeyPosition = procedure(Sender: TObject; AKeyPos: UInt32) of object;
 
   TOpenAddressing<OPEN_ADDRESSING_CONSTRAINTS> = class abstract(TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>)
@@ -156,9 +180,12 @@ type
     end;
 
     TItemsArray = array of TItem;
-  private var
-    FItemsThreshold: SizeInt;
+    TPointersEnumerator = class(TOpenAddressingPointersEnumerator<TItem, PDictionaryPair>);
+    PPointersCollection = ^TPointersCollection;
+    TPointersCollection = TOpenAddressingPointersCollection<TPointersEnumerator, TItem, PDictionaryPair>;
+  private var // FItems must be declared as first field 
     FItems: TItemsArray;
+    FItemsThreshold: SizeInt;
 
     procedure Resize(ANewSize: SizeInt);
     procedure PrepareAddingItem;
@@ -205,6 +232,7 @@ type
   private
     function GetKeys: TKeyCollection;
     function GetValues: TValueCollection;
+    function GetPointers: PPointersCollection; inline;
   private
     function GetItem(const AKey: TKey): TValue; inline;
     procedure SetItem(const AKey: TKey; const AValue: TValue); inline;
@@ -241,6 +269,7 @@ type
     property Items[Index: TKey]: TValue read GetItem write SetItem; default;
     property Keys: TKeyCollection read GetKeys;
     property Values: TValueCollection read GetValues;
+    property Ptr: PPointersCollection read GetPointers;
 
     procedure GetMemoryLayout(const AOnGetMemoryLayoutKeyPosition: TOnGetMemoryLayoutKeyPosition);
   end;
@@ -343,6 +372,32 @@ type
     constructor Create(ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);
   end;
 
+  TDeamortizedDArrayPointersEnumerator<TCuckooCfg, TItemsArray, TItemsDArray, TQueueDictionary, PDictionaryPair> = class abstract(TEnumerator<PDictionaryPair>)
+  private var // FItems must be declared as first field and FQueue as second
+    FItems: ^TItemsDArray;
+    FQueue: TQueueDictionary;
+    FIndex: SizeInt;
+    FMainIndex: SizeInt;
+  protected
+    function DoMoveNext: boolean; override;
+    function DoGetCurrent: PDictionaryPair; override;
+    function GetCurrent: PDictionaryPair; virtual;
+  public
+    constructor Create(var AItems; AQueue: TQueueDictionary; ACount: SizeInt);
+  end;
+
+  TDeamortizedDArrayPointersCollection<TPointersEnumerator, TItemsDArray, TQueueDictionary, PDictionaryPair> = record
+  private type
+    PArray = ^TItemsDArray;
+    function Items: PArray; inline;
+    function GetCount: SizeInt; inline;
+    function GetQueue: TQueueDictionary; inline;
+  public
+    function GetEnumerator: TPointersEnumerator;
+    function ToArray: TArray<PDictionaryPair>;
+    property Count: SizeInt read GetCount;
+  end;
+
   // more info :
   // http://arxiv.org/abs/0903.0391
 
@@ -382,13 +437,16 @@ type
     TCDM = class(TOpenAddressingSH<TKey, TEmptyRecord, TDelphiHashFactory, TLinearProbing>);
     TItemsArray = array of TItem;
     TItemsDArray = array[0..Pred(TCuckooCfg.D)] of TItemsArray;
+    TPointersEnumerator = class(TDeamortizedDArrayPointersEnumerator<TCuckooCfg, TItemsArray, TItemsDArray, TQueueDictionary, PDictionaryPair>);
+    PPointersCollection = ^TPointersCollection;
+    TPointersCollection = TDeamortizedDArrayPointersCollection<TPointersEnumerator, TItemsDArray, TQueueDictionary, PDictionaryPair>;
   private var
+    FItems: TItemsDArray;
     FQueue: TQueueDictionary;  // probably can be optimized - hash TItem give information from TItem.Hash for cuckoo ...
       // currently is kept in "TQueueDictionary = class(TOpenAddressingSH<TKey, TItem, ...>"
 
     FCDM: TCDM; // cycle-detection mechanism
     FItemsThreshold: SizeInt;
-    FItems: TItemsDArray;
   // sadly there is bug #24848 for class var ...
   {class} var
     CUCKOO_SIGN, CUCKOO_INDEX_SIZE, CUCKOO_HASH_SIGN: UInt32;
@@ -440,6 +498,7 @@ type
   private
     function GetKeys: TKeyCollection;
     function GetValues: TValueCollection;
+    function GetPointers: PPointersCollection; inline;
   private
     function GetItem(const AKey: TKey): TValue; inline;
     procedure SetItem(const AKey: TKey; const AValue: TValue); overload; inline;
@@ -488,6 +547,7 @@ type
     property Items[Index: TKey]: TValue read GetItem write SetItem; default;
     property Keys: TKeyCollection read GetKeys;
     property Values: TValueCollection read GetValues;
+    property Ptr: PPointersCollection read GetPointers;
 
     property QueueCount: SizeInt read GetQueueCount;
     procedure GetMemoryLayout(const AOnGetMemoryLayoutKeyPosition: TOnGetMemoryLayoutKeyPosition);
