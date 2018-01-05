@@ -731,6 +731,33 @@ type
     function Add(constref AValue: T): PNode; reintroduce;
   end;
 
+  TSortedHashSet<T> = class(THashSet<T>)
+  protected
+    FInternalTree: TAVLTree<T>;
+    function DoGetEnumerator: TEnumerator<T>; override;
+    procedure InitializeSet; override;
+  public type
+    TSortedHashSetEnumerator = class(THashSetEnumerator)
+    protected type
+      TTreeEnumerator = TAVLTree<T>.TNodeEnumerator;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: T; override;
+      function GetCurrent: T; virtual;
+    public
+      constructor Create(ASet: TSortedHashSet<T>);
+      destructor Destroy; override;
+    end;
+  public // type
+    //TEnumerator = TSetEnumerator;
+
+    function GetEnumerator: THashSetEnumerator; override;
+  public
+    function Add(constref AValue: T): Boolean; override;
+    function Remove(constref AValue: T): Boolean; override;
+
+    destructor Destroy; override;
+  end;
+
 function InCircularRange(ABottom, AItem, ATop: SizeInt): Boolean;
 
 var
@@ -3256,6 +3283,71 @@ end;
 function TIndexedAVLTree<T>.Add(constref AValue: T): PNode;
 begin
   Result := inherited Add(AValue, EmptyRecord);
+end;
+
+{ TSortedHashSet<T>.TSortedHashSetEnumerator }
+
+function TSortedHashSet<T>.TSortedHashSetEnumerator.DoMoveNext: boolean;
+begin
+  Result := TTreeEnumerator(FEnumerator).DoMoveNext;
+end;
+
+function TSortedHashSet<T>.TSortedHashSetEnumerator.DoGetCurrent: T;
+begin
+  Result := TTreeEnumerator(FEnumerator).DoGetCurrent.Key;
+end;
+
+function TSortedHashSet<T>.TSortedHashSetEnumerator.GetCurrent: T;
+begin
+  Result := TTreeEnumerator(FEnumerator).GetCurrent.Key;
+end;
+
+constructor TSortedHashSet<T>.TSortedHashSetEnumerator.Create(ASet: TSortedHashSet<T>);
+begin
+  FEnumerator := ASet.FInternalTree.Nodes.DoGetEnumerator;
+end;
+
+destructor TSortedHashSet<T>.TSortedHashSetEnumerator.Destroy;
+begin
+  FEnumerator.Free;
+end;
+
+{ TSortedHashSet<T> }
+
+function TSortedHashSet<T>.DoGetEnumerator: TEnumerator<T>;
+begin
+  Result := GetEnumerator;
+end;
+
+procedure TSortedHashSet<T>.InitializeSet;
+begin
+  inherited;
+  FInternalTree := TAVLTree<T>.Create;
+end;
+
+function TSortedHashSet<T>.GetEnumerator: THashSetEnumerator;
+begin
+  Result := TSortedHashSetEnumerator.Create(Self);
+end;
+
+function TSortedHashSet<T>.Add(constref AValue: T): Boolean;
+begin
+  Result := inherited;
+  if Result then
+    FInternalTree.Add(AValue);
+end;
+
+function TSortedHashSet<T>.Remove(constref AValue: T): Boolean;
+begin
+  Result := inherited;
+  if Result then
+    FInternalTree.Remove(AValue);
+end;
+
+destructor TSortedHashSet<T>.Destroy;
+begin
+  FInternalTree.Free;
+  inherited;
 end;
 
 end.
