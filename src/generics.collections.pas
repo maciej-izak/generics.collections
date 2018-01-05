@@ -481,10 +481,13 @@ type
   protected
     FInternalDictionary : TOpenAddressingLP<T, TEmptyRecord>;
     function DoGetEnumerator: TEnumerator<T>; override;
+    procedure InitializeSet; virtual;
   public type
-    TSetEnumerator = class(TEnumerator<T>)
-    protected
-      FEnumerator: TDictionary<T, TEmptyRecord>.TKeyEnumerator;
+    THashSetEnumerator = class(TEnumerator<T>)
+    protected type
+      TDictionaryEnumerator = TDictionary<T, TEmptyRecord>.TKeyEnumerator;
+    protected var
+      FEnumerator: TObject;
       function DoMoveNext: boolean; override;
       function DoGetCurrent: T; override;
       function GetCurrent: T; virtual;
@@ -496,17 +499,17 @@ type
     function GetCount: SizeInt; inline;
     function GetPointers: TDictionary<T, TEmptyRecord>.TKeyCollection.PPointersCollection; inline;
   public type
-    TEnumerator = TSetEnumerator;
+    //TEnumerator = TSetEnumerator;
     PT = ^T;
 
-    function GetEnumerator: TEnumerator; reintroduce;
+    function GetEnumerator: THashSetEnumerator; reintroduce; virtual;
   public
     constructor Create; virtual; overload;
     constructor Create(const AComparer: IEqualityComparer<T>); virtual; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
     destructor Destroy; override;
-    function Add(constref AValue: T): Boolean;
-    function Remove(constref AValue: T): Boolean;
+    function Add(constref AValue: T): Boolean; virtual;
+    function Remove(constref AValue: T): Boolean; virtual;
     procedure Clear;
     function Contains(constref AValue: T): Boolean; inline;
     procedure UnionWith(AHashSet: THashSet<T>);
@@ -1865,36 +1868,42 @@ end;
 
 {$I inc\generics.dictionaries.inc}
 
-{ THashSet<T> }
+{ THashSet<T>.THashSetEnumerator }
 
-function THashSet<T>.TEnumerator.DoMoveNext: boolean;
+function THashSet<T>.THashSetEnumerator.DoMoveNext: boolean;
 begin
-  Result := FEnumerator.DoMoveNext;
+  Result := TDictionaryEnumerator(FEnumerator).DoMoveNext;
 end;
 
-function THashSet<T>.TEnumerator.DoGetCurrent: T;
+function THashSet<T>.THashSetEnumerator.DoGetCurrent: T;
 begin
-  Result := FEnumerator.DoGetCurrent;
+  Result := TDictionaryEnumerator(FEnumerator).DoGetCurrent;
 end;
 
-function THashSet<T>.TEnumerator.GetCurrent: T;
+function THashSet<T>.THashSetEnumerator.GetCurrent: T;
 begin
-  Result := FEnumerator.GetCurrent;
+  Result := TDictionaryEnumerator(FEnumerator).GetCurrent;
 end;
 
-constructor THashSet<T>.TEnumerator.Create(ASet: THashSet<T>);
+constructor THashSet<T>.THashSetEnumerator.Create(ASet: THashSet<T>);
 begin
-  FEnumerator := ASet.FInternalDictionary.Keys.DoGetEnumerator;
+  TDictionaryEnumerator(FEnumerator) := ASet.FInternalDictionary.Keys.DoGetEnumerator;
 end;
 
-destructor THashSet<T>.TEnumerator.Destroy;
+destructor THashSet<T>.THashSetEnumerator.Destroy;
 begin
   FEnumerator.Free;
 end;
 
+{ THashSet<T>.TEnumerator }
+
 function THashSet<T>.DoGetEnumerator: Generics.Collections.TEnumerator<T>;
 begin
   Result := GetEnumerator;
+end;
+
+procedure THashSet<T>.InitializeSet;
+begin
 end;
 
 function THashSet<T>.GetCount: SizeInt;
@@ -1907,18 +1916,20 @@ begin
   Result := FInternalDictionary.Keys.Ptr;
 end;
 
-function THashSet<T>.GetEnumerator: TEnumerator;
+function THashSet<T>.GetEnumerator: THashSetEnumerator;
 begin
-  Result := TEnumerator.Create(Self);
+  Result := THashSetEnumerator.Create(Self);
 end;
 
 constructor THashSet<T>.Create;
 begin
+  InitializeSet;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create;
 end;
 
 constructor THashSet<T>.Create(const AComparer: IEqualityComparer<T>);
 begin
+  InitializeSet;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create(AComparer);
 end;
 
