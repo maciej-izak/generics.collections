@@ -24,6 +24,7 @@ unit Generics.Collections;
 {$DEFINE CUSTOM_DICTIONARY_CONSTRAINTS := TKey, TValue, THashFactory}
 {$DEFINE OPEN_ADDRESSING_CONSTRAINTS := TKey, TValue, THashFactory, TProbeSequence}
 {$DEFINE CUCKOO_CONSTRAINTS := TKey, TValue, THashFactory, TCuckooCfg}
+{$DEFINE TREE_CONSTRAINTS := TKey, TValue, TInfo}
 {$WARNINGS OFF}
 {$HINTS OFF}
 {$OVERFLOWCHECKS OFF}
@@ -57,6 +58,9 @@ uses
 {.$define EXTRA_WARNINGS}
 
 type
+  EAVLTree = class(Exception);
+  EIndexedAVLTree = class(EAVLTree);
+
   TDuplicates = Classes.TDuplicates;
 
   {$ifdef VER3_0_0}
@@ -518,6 +522,213 @@ type
     procedure SymmetricExceptWith(AHashSet: THashSet<T>);
     property Count: SizeInt read GetCount;
     property Ptr: TDictionary<T, TEmptyRecord>.TKeyCollection.PPointersCollection read GetPointers;
+  end;
+
+  TPair<TKey, TValue, TInfo> = record
+  public
+    Key: TKey;
+    Value: TValue;
+  private
+    Info: TInfo;
+  end;
+
+  TAVLTreeNode<TREE_CONSTRAINTS, TTree> = record
+  private type
+    TNodePair = TPair<TREE_CONSTRAINTS>;
+  public type
+    PNode = ^TAVLTreeNode<TREE_CONSTRAINTS, TTree>;
+  public
+    Parent, Left, Right: PNode;
+    Balance: Integer;
+    Data: TNodePair;
+    function Successor: PNode;
+    function Precessor: PNode;
+    function TreeDepth: integer;
+    procedure ConsistencyCheck(ATree: TObject); // workaround for internal error 2012101001 (no generic forward declarations)
+    function GetCount: SizeInt;
+    property Key: TKey read Data.Key write Data.Key;
+    property Value: TValue read Data.Value write Data.Value;
+    property Info: TInfo read Data.Info write Data.Info;
+  end;
+
+  TCustomTreeEnumerator<T, PNode, TTree> = class abstract(TEnumerator<T>)
+  protected
+    FCurrent: PNode;
+    FTree: TTree;
+    function DoGetCurrent: T; override;
+    function GetCurrent: T; virtual; abstract;
+  public
+    constructor Create(ATree: TObject);
+    function MoveNext: Boolean; virtual; abstract;
+    property Current: T read GetCurrent;
+  end;
+
+  TCustomTree<TREE_CONSTRAINTS> = class
+  end;
+
+  TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator,
+    T, PT, PNode, TTree> = class abstract(TEnumerable<T>)
+  private type
+    PPointersCollection = ^TPointersCollection;
+    TPointersCollection = record
+    private
+      function Tree: TTree; inline;
+      function GetCount: SizeInt; inline;
+    public
+      function GetEnumerator: TTreePointersEnumerator;
+      function ToArray: TArray<PT>;
+      property Count: SizeInt read GetCount;
+    end;
+  private
+    FPointers: TPointersCollection;
+    FTree: TTree;
+    function GetCount: SizeInt;
+    function GetPointers: PPointersCollection; inline;
+  public
+    constructor Create(ATree: TTree);
+    function DoGetEnumerator: TTreeEnumerator; override;
+    function ToArray: TArray<T>; override; final;
+    property Count: SizeInt read GetCount;
+    property Ptr: PPointersCollection read GetPointers;
+  end;
+
+  TAVLTreeEnumerator<T, PNode, TTree> = class(TCustomTreeEnumerator<T, PNode, TTree>)
+  protected
+    FLowToHigh: boolean;
+    function DoMoveNext: Boolean; override;
+  public
+    constructor Create(ATree: TObject; ALowToHigh: boolean = true);
+    property LowToHigh: boolean read FLowToHigh;
+  end;
+
+  TCustomAVLTreeMap<TREE_CONSTRAINTS> = class
+  private type
+    TTree = class(TCustomAVLTreeMap<TREE_CONSTRAINTS>);
+  public type
+    TNode = TAVLTreeNode<TREE_CONSTRAINTS, TTree>;
+    PNode = ^TNode;
+    TTreePair = TPair<TKey, TValue>;
+  private type
+    PPNode = ^PNode;
+    // type exist only for generic constraint in TNodeCollection (non functional - PPNode has no sense)
+    TPNodeEnumerator = class(TAVLTreeEnumerator<PPNode, PNode, TTree>);
+  private var
+    FComparer: IComparer<TKey>;
+  protected
+    FCount: SizeInt;
+    FRoot: PNode;
+    procedure NodeAdded(ANode: PNode); virtual;
+    procedure DeletingNode(ANode: PNode; AOrigin: boolean); virtual;
+
+    function AddNode: PNode; virtual; abstract;
+
+    procedure DeleteNode(ANode: PNode; ADispose: boolean); overload; virtual; abstract;
+    procedure DeleteNode(ANode: PNode); overload;
+
+    function Compare(constref ALeft, ARight: TKey): Integer; inline;
+    function FindPredecessor(ANode: PNode): PNode;
+
+
+    procedure RotateRightRight(ANode: PNode); virtual;
+    procedure RotateLeftLeft(ANode: PNode); virtual;
+    procedure RotateRightLeft(ANode: PNode); virtual;
+    procedure RotateLeftRight(ANode: PNode); virtual;
+
+    // for reporting
+    procedure WriteStr(AStream: TStream; const AText: string);
+  public type
+    TPairEnumerator = class(TAVLTreeEnumerator<TTreePair, PNode, TTree>)
+    protected
+      function GetCurrent: TTreePair; override;
+    end;
+
+    TNodeEnumerator = class(TAVLTreeEnumerator<PNode, PNode, TTree>)
+    protected
+      function GetCurrent: PNode; override;
+    end;
+
+    TKeyEnumerator = class(TAVLTreeEnumerator<TKey, PNode, TTree>)
+    protected
+      function GetCurrent: TKey; override;
+    end;
+
+    TValueEnumerator = class(TAVLTreeEnumerator<TValue, PNode, TTree>)
+    protected
+      function GetCurrent: TValue; override;
+    end;
+
+    TNodeCollection = class(TTreeEnumerable<TNodeEnumerator, TPNodeEnumerator, PNode, PPNode, PNode, TTree>)
+    private
+      property Ptr; // PPNode has no sense, so hide enumerator for PPNode
+    end;
+
+  private
+    FNodes: TNodeCollection;
+    function GetNodeCollection: TNodeCollection;
+    procedure InternalDelete(ANode: PNode);
+  public
+    constructor Create; virtual;
+    destructor Destroy; override;
+    function Add(constref AKey: TKey; constref AValue: TValue): PNode;
+    function Remove(constref AKey: TKey): boolean;
+    procedure Delete(ANode: PNode; ADispose: boolean = true);
+
+    function GetEnumerator: TPairEnumerator;
+    property Nodes: TNodeCollection read GetNodeCollection;
+
+    procedure Clear(ADisposeNodes: Boolean = true); virtual;
+
+    function FindLowest: PNode; // O(log(n))
+    function FindHighest: PNode; // O(log(n))
+
+    property Count: SizeInt read FCount;
+    property Root: PNode read FRoot;
+    function Find(constref AKey: TKey): PNode; // O(log(n))
+
+    procedure ConsistencyCheck; virtual;
+    procedure WriteTreeNode(AStream: TStream; ANode: PNode);
+    procedure WriteReportToStream(AStream: TStream);
+    function NodeToReportStr(ANode: PNode): string; virtual;
+    function ReportAsString: string;
+  end;
+
+  TAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, TEmptyRecord>)
+  protected
+    function AddNode: PNode; override;
+    procedure DeleteNode(ANode: PNode; ADispose: boolean = true); override;
+  end;
+
+  TIndexedAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, SizeInt>)
+  protected
+    FLastNode: PNode;
+    FLastIndex: SizeInt;
+
+    procedure RotateRightRight(ANode: PNode); override;
+    procedure RotateLeftLeft(ANode: PNode); override;
+    procedure RotateRightLeft(ANode: PNode); override;
+    procedure RotateLeftRight(ANode: PNode); override;
+
+    procedure NodeAdded(ANode: PNode); override;
+    procedure DeletingNode(ANode: PNode; AOrigin: boolean); override;
+
+    function AddNode: PNode; override;
+    procedure DeleteNode(ANode: PNode; ADispose: boolean = true); override;
+  public
+    function GetNodeAtIndex(AIndex: SizeInt): PNode;
+    function NodeToIndex(ANode: PNode): SizeInt;
+
+    procedure ConsistencyCheck; override;
+    function NodeToReportStr(ANode: PNode): string; override;
+  end;
+
+  TAVLTree<T> = class(TAVLTreeMap<T, TEmptyRecord>)
+  public
+    function Add(constref AValue: T): PNode; reintroduce;
+  end;
+
+  TIndexedAVLTree<T> = class(TIndexedAVLTreeMap<T, TEmptyRecord>)
+  public
+    function Add(constref AValue: T): PNode; reintroduce;
   end;
 
 function InCircularRange(ABottom, AItem, ATop: SizeInt): Boolean;
@@ -2024,6 +2235,1027 @@ begin
     Remove(i^);
 
   LList.Free;
+end;
+
+{ TAVLTreeNode<TREE_CONSTRAINTS, TTree> }
+
+function TAVLTreeNode<TREE_CONSTRAINTS, TTree>.Successor: PNode;
+begin
+  Result:=Right;
+  if Result<>nil then begin
+    while (Result.Left<>nil) do Result:=Result.Left;
+  end else begin
+    Result:=@Self;
+    while (Result.Parent<>nil) and (Result.Parent.Right=Result) do
+      Result:=Result.Parent;
+    Result:=Result.Parent;
+  end;
+end;
+
+function TAVLTreeNode<TREE_CONSTRAINTS, TTree>.Precessor: PNode;
+begin
+  Result:=Left;
+  if Result<>nil then begin
+    while (Result.Right<>nil) do Result:=Result.Right;
+  end else begin
+    Result:=@Self;
+    while (Result.Parent<>nil) and (Result.Parent.Left=Result) do
+      Result:=Result.Parent;
+    Result:=Result.Parent;
+  end;
+end;
+
+function TAVLTreeNode<TREE_CONSTRAINTS, TTree>.TreeDepth: integer;
+// longest WAY down. e.g. only one node => 0 !
+var LeftDepth, RightDepth: integer;
+begin
+  if Left<>nil then
+    LeftDepth:=Left.TreeDepth+1
+  else
+    LeftDepth:=0;
+  if Right<>nil then
+    RightDepth:=Right.TreeDepth+1
+  else
+    RightDepth:=0;
+  if LeftDepth>RightDepth then
+    Result:=LeftDepth
+  else
+    Result:=RightDepth;
+end;
+
+procedure TAVLTreeNode<TREE_CONSTRAINTS, TTree>.ConsistencyCheck(ATree: TObject);
+var
+  LTree: TTree absolute ATree;
+  LeftDepth: SizeInt;
+  RightDepth: SizeInt;
+begin
+  // test left child
+  if Left<>nil then begin
+    if Left.Parent<>@Self then
+      raise EAVLTree.Create('Left.Parent<>Self');
+    if LTree.Compare(Left.Data.Key,Data.Key)>0 then
+      raise EAVLTree.Create('Compare(Left.Data,Data)>0');
+    Left.ConsistencyCheck(LTree);
+  end;
+  // test right child
+  if Right<>nil then begin
+    if Right.Parent<>@Self then
+      raise EAVLTree.Create('Right.Parent<>Self');
+    if LTree.Compare(Data.Key,Right.Data.Key)>0 then
+      raise EAVLTree.Create('Compare(Data,Right.Data)>0');
+    Right.ConsistencyCheck(LTree);
+  end;
+  // test balance
+  if Left<>nil then
+    LeftDepth:=Left.TreeDepth+1
+  else
+    LeftDepth:=0;
+  if Right<>nil then
+    RightDepth:=Right.TreeDepth+1
+  else
+    RightDepth:=0;
+  if Balance<>(LeftDepth-RightDepth) then
+    raise EAVLTree.CreateFmt('Balance[%d]<>(RightDepth[%d]-LeftDepth[%d])', [Balance, RightDepth, LeftDepth]);
+end;
+
+function TAVLTreeNode<TREE_CONSTRAINTS, TTree>.GetCount: SizeInt;
+begin
+  Result:=1;
+  if Assigned(Left) then Inc(Result,Left.GetCount);
+  if Assigned(Right) then Inc(Result,Right.GetCount);
+end;
+
+{ TCustomTreeEnumerator<T, PNode, TTree> }
+
+function TCustomTreeEnumerator<T, PNode, TTree>.DoGetCurrent: T;
+begin
+  Result := GetCurrent;
+end;
+
+constructor TCustomTreeEnumerator<T, PNode, TTree>.Create(ATree: TObject);
+begin
+  TObject(FTree) := ATree;
+end;
+
+{ TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, TREE_CONSTRAINTS>.TPointersCollection }
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
+  TPointersCollection.Tree: TTree;
+begin
+  Result := TTree(Pointer(@Self)^);
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
+  TPointersCollection.GetCount: SizeInt;
+begin
+  Result := Tree.Count;
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
+  TPointersCollection.{Do}GetEnumerator: TTreePointersEnumerator;
+begin
+  Result := TTreePointersEnumerator(TTreePointersEnumerator.NewInstance);
+  TCustomTreeEnumerator<PT, PNode, TTree>(Result).Create(Tree);
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
+  TPointersCollection.ToArray: TArray<PT>;
+var
+  i: SizeInt;
+  LEnumerator: TTreePointersEnumerator;
+begin
+  SetLength(Result, Count);
+
+  try
+    LEnumerator := GetEnumerator;
+
+    i := 0;
+    while LEnumerator.MoveNext do
+    begin
+      Result[i] := LEnumerator.Current;
+      Inc(i);
+    end;
+  finally
+    LEnumerator.Free;
+  end;
+end;
+
+{ TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, TREE_CONSTRAINTS> }
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetCount: SizeInt;
+begin
+  Result := FTree.Count;
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPointers: PPointersCollection;
+begin
+  Result := @FPointers;
+end;
+
+constructor TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.Create(
+  ATree: TTree);
+begin
+  FTree := ATree;
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
+  DoGetEnumerator: TTreeEnumerator;
+begin
+  Result := TTreeEnumerator(TTreeEnumerator.NewInstance);
+  TTreeEnumerator(Result).Create(FTree);
+end;
+
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.ToArray: TArray<T>;
+begin
+  Result := ToArrayImpl(FTree.Count);
+end;
+
+{ TAVLTreeEnumerator<T, PNode, TTree> }
+
+function TAVLTreeEnumerator<T, PNode, TTree>.DoMoveNext: Boolean;
+begin
+  if FLowToHigh then begin
+    if FCurrent<>nil then
+      FCurrent:=FCurrent.Successor
+    else
+      FCurrent:=FTree.FindLowest;
+  end else begin
+    if FCurrent<>nil then
+      FCurrent:=FCurrent.Precessor
+    else
+      FCurrent:=FTree.FindHighest;
+  end;
+  Result:=FCurrent<>nil;
+end;
+
+constructor TAVLTreeEnumerator<T, PNode, TTree>.Create(ATree: TObject; ALowToHigh: boolean);
+begin
+  inherited Create(ATree);
+  FLowToHigh:=aLowToHigh;
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TPairEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TPairEnumerator.GetCurrent: TTreePair;
+begin
+  Result := TTreePair((@FCurrent.Data)^);
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TNodeEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TNodeEnumerator.GetCurrent: PNode;
+begin
+  Result := FCurrent;
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TKeyEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TKeyEnumerator.GetCurrent: TKey;
+begin
+  Result := FCurrent.Key;
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TValueEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TValueEnumerator.GetCurrent: TValue;
+begin
+  Result := FCurrent.Value;
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS> }
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.NodeAdded(ANode: PNode);
+begin
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.DeletingNode(ANode: PNode; AOrigin: boolean);
+begin
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.DeleteNode(ANode: PNode);
+begin
+  if ANode.Left<>nil then
+    DeleteNode(ANode.Left, true);
+  if ANode.Right<>nil then
+    DeleteNode(ANode.Right, true);
+  Dispose(ANode);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Compare(constref ALeft, ARight: TKey): Integer; inline;
+begin
+  Result := FComparer.Compare(ALeft, ARight);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.FindPredecessor(ANode: PNode): PNode;
+begin
+  if ANode <> nil then
+  begin
+    if ANode.Left <> nil then
+    begin
+      ANode := ANode.Left;
+      while ANode.Right <> nil do ANode := ANode.Right;
+    end
+    else
+    repeat
+      Result := ANode;
+      ANode := ANode.Parent;
+    until (ANode = nil) or (ANode.Right = Result);
+  end;
+  Result := ANode;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.RotateRightRight(ANode: PNode);
+var
+  LNode, LParent: PNode;
+begin
+  LNode := ANode.Right;
+  LParent := ANode.Parent;
+
+  ANode.Right := LNode.Left;
+  if ANode.Right <> nil then
+    ANode.Right.Parent := ANode;
+
+  LNode.Left := ANode;
+  LNode.Parent := LParent;
+  ANode.Parent := LNode;
+
+  if LParent <> nil then
+  begin
+    if LParent.Left = ANode then
+      LParent.Left := LNode
+    else
+      LParent.Right := LNode;
+  end
+  else
+    FRoot := LNode;
+
+  if LNode.Balance = -1 then
+  begin
+    ANode.Balance := 0;
+    LNode.Balance := 0;
+  end
+  else
+  begin
+    ANode.Balance := -1;
+    LNode.Balance := 1;
+  end
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.RotateLeftLeft(ANode: PNode);
+var
+  LNode, LParent: PNode;
+begin
+  LNode := ANode.Left;
+  LParent := ANode.Parent;
+
+  ANode.Left := LNode.Right;
+  if ANode.Left <> nil then
+    ANode.Left.Parent := ANode;
+
+  LNode.Right := ANode;
+  LNode.Parent := LParent;
+  ANode.Parent := LNode;
+
+  if LParent <> nil then
+  begin
+    if LParent.Left = ANode then
+      LParent.Left := LNode
+    else
+      LParent.Right := LNode;
+  end
+  else
+    FRoot := LNode;
+
+  if LNode.Balance = 1 then
+  begin
+    ANode.Balance := 0;
+    LNode.Balance := 0;
+  end
+  else
+  begin
+    ANode.Balance := 1;
+    LNode.Balance := -1;
+  end
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.RotateRightLeft(ANode: PNode);
+var
+  LRight, LLeft, LParent: PNode;
+begin
+  LRight := ANode.Right;
+  LLeft := LRight.Left;
+  LParent := ANode.Parent;
+
+  LRight.Left := LLeft.Right;
+  if LRight.Left <> nil then
+    LRight.Left.Parent := LRight;
+
+  ANode.Right := LLeft.Left;
+  if ANode.Right <> nil then
+    ANode.Right.Parent := ANode;
+
+  LLeft.Left := ANode;
+  LLeft.Right := LRight;
+  ANode.Parent := LLeft;
+  LRight.Parent := LLeft;
+
+  LLeft.Parent := LParent;
+
+  if LParent <> nil then
+  begin
+    if LParent.Left = ANode then
+      LParent.Left := LLeft
+    else
+      LParent.Right := LLeft;
+  end
+  else
+    FRoot := LLeft;
+
+  if LLeft.Balance = -1 then
+    ANode.Balance := 1
+  else
+    ANode.Balance := 0;
+
+  if LLeft.Balance = 1 then
+    LRight.Balance := -1
+  else
+    LRight.Balance := 0;
+
+  LLeft.Balance := 0;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.RotateLeftRight(ANode: PNode);
+var
+  LLeft, LRight, LParent: PNode;
+begin
+  LLeft := ANode.Left;
+  LRight := LLeft.Right;
+  LParent := ANode.Parent;
+
+  LLeft.Right := LRight.Left;
+  if LLeft.Right <> nil then
+    LLeft.Right.Parent := LLeft;
+
+  ANode.Left := LRight.Right;
+  if ANode.Left <> nil then
+    ANode.Left.Parent := ANode;
+
+  LRight.Right := ANode;
+  LRight.Left := LLeft;
+  ANode.Parent := LRight;
+  LLeft.Parent := LRight;
+
+  LRight.Parent := LParent;
+
+  if LParent <> nil then
+  begin
+    if LParent.Left = ANode then
+      LParent.Left := LRight
+    else
+      LParent.Right := LRight;
+  end
+  else
+    FRoot := LRight;
+
+  if LRight.Balance =  1 then
+    ANode.Balance := -1
+  else
+    ANode.Balance := 0;
+  if LRight.Balance = -1 then
+    LLeft.Balance :=  1
+  else
+    LLeft.Balance := 0;
+
+  LRight.Balance := 0;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.WriteStr(AStream: TStream; const AText: string);
+begin
+  if AText='' then exit;
+  AStream.Write(AText[1],Length(AText));
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.GetNodeCollection: TNodeCollection;
+begin
+  if not Assigned(FNodes) then
+    FNodes := TNodeCollection.Create(TTree(Self));
+  Result := FNodes;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.InternalDelete(ANode: PNode);
+var
+  t, y, z: PNode;
+  LNest: boolean;
+begin
+  if (ANode.Left <> nil) and (ANode.Right <> nil) then
+  begin
+    y := FindPredecessor(ANode);
+    y.Info := ANode.Info;
+    DeletingNode(y, false);
+    InternalDelete(y);
+    LNest := false;
+  end
+  else
+  begin
+    if ANode.Left <> nil then
+    begin
+      y := ANode.Left;
+      ANode.Left := nil;
+    end
+    else
+    begin
+      y := ANode.Right;
+      ANode.Right := nil;
+    end;
+    ANode.Balance := 0;
+    LNest  := true;
+  end;
+
+  if y <> nil then
+  begin
+    y.Parent := ANode.Parent;
+    y.Left  := ANode.Left;
+    if y.Left <> nil then
+      y.Left.Parent := y;
+    y.Right := ANode.Right;
+    if y.Right <> nil then
+      y.Right.Parent := y;
+    y.Balance := ANode.Balance;
+  end;
+
+  if ANode.Parent <> nil then
+  begin
+    if ANode.Parent.Left = ANode then
+      ANode.Parent.Left := y
+    else
+      ANode.Parent.Right := y;
+  end
+  else
+    FRoot := y;
+
+  if LNest then
+  begin
+    z := y;
+    y := ANode.Parent;
+    while y <> nil do
+    begin
+      if y.Balance = 0 then
+      begin
+        if y.Left = z then
+          y.Balance := -1
+        else
+          y.Balance := 1;
+        break;
+      end
+      else
+      begin
+        if ((y.Balance = 1) and (y.Left = z)) or ((y.Balance = -1) and (y.Right = z)) then
+        begin
+          y.Balance := 0;
+          z := y;
+          y := y.Parent;
+        end
+        else
+        begin
+          if y.Left = z then
+            t := y.Right
+          else
+            t := y.Left;
+          if t.Balance = 0 then
+          begin
+            if y.Balance = 1 then
+              RotateLeftLeft(y)
+            else
+              RotateRightRight(y);
+            break;
+          end
+          else if y.Balance = t.Balance then
+          begin
+            if y.Balance = 1 then
+              RotateLeftLeft(y)
+            else
+              RotateRightRight(y);
+            z := t;
+            y := t.Parent;
+          end
+          else
+          begin
+            if y.Balance = 1 then
+              RotateLeftRight(y)
+            else
+              RotateRightLeft(y);
+            z := y.Parent;
+            y := z.Parent;
+          end
+        end
+      end
+    end
+  end;
+end;
+
+constructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Create;
+begin
+  FComparer := TComparer<TKey>.Default;
+end;
+
+destructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Destroy;
+begin
+  FNodes.Free;
+  Clear;
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref AKey: TKey; constref AValue: TValue): PNode;
+var
+  LParent, LNode: PNode;
+begin
+  Inc(FCount);
+  Result := AddNode;
+  Result.Data.Key := AKey;
+  Result.Data.Value := AValue;
+
+  LParent := FRoot;
+  if LParent = nil then // first item in tree
+  begin
+    FRoot := Result;
+    NodeAdded(Result);
+    Exit;
+  end;
+
+  // insert new node
+
+  while true do
+    if Compare(Result.Key,LParent.Key)<0 then
+    begin
+      if LParent.Left = nil then
+      begin
+        LParent.Left := Result;
+        Break;
+      end;
+      LParent := LParent.Left;
+    end
+    else
+    begin
+      if LParent.Right = nil then
+      begin
+        LParent.Right := Result;
+        Break;
+      end;
+      LParent := LParent.Right;
+    end;
+
+  Result.Parent := LParent;
+
+  NodeAdded(Result);
+
+  // balance after insert
+
+  if LParent.Balance<>0 then
+    LParent.Balance := 0
+  else
+  begin
+    if LParent.Left = Result then
+      LParent.Balance := 1
+    else
+      LParent.Balance := -1;
+
+    LNode := LParent.Parent;
+
+    while LNode <> nil do
+    begin
+      if LNode.Balance<>0 then
+      begin
+        if LNode.Balance = 1 then
+        begin
+          if LNode.Right = LParent then
+            LNode.Balance := 0
+          else if LParent.Balance = -1 then
+            RotateLeftRight(LNode)
+          else
+            RotateLeftLeft(LNode);
+        end
+        else
+        begin
+          if LNode.Left = LParent then
+            LNode.Balance := 0
+          else if LParent^.Balance = 1 then
+            RotateRightLeft(LNode)
+          else
+            RotateRightRight(LNode);
+        end;
+        Break;
+      end;
+
+      if LNode.Left = LParent then
+        LNode.Balance := 1
+      else
+        LNode.Balance := -1;
+
+      LParent := LNode;
+      LNode := LNode.Parent;
+    end;
+  end;
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Remove(constref AKey: TKey): boolean;
+var
+  LNode: PNode;
+begin
+  LNode:=Find(AKey);
+  if LNode<>nil then begin
+    Delete(LNode);
+    Result:=true;
+  end else
+    Result:=false;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.Delete(ANode: PNode; ADispose: boolean);
+begin
+  if (ANode.Left = nil) or (ANode.Right = nil) then
+    DeletingNode(ANode, true);
+
+  InternalDelete(ANode);
+
+  DeleteNode(ANode, ADispose);
+  Dec(FCount);
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.Clear(ADisposeNodes: Boolean);
+begin
+  if (FRoot<>nil) and ADisposeNodes then
+    DeleteNode(FRoot);
+  fRoot:=nil;
+  FCount:=0;
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.GetEnumerator: TPairEnumerator;
+begin
+  Result := TPairEnumerator.Create(Self, true);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.FindLowest: PNode;
+begin
+  Result:=FRoot;
+  if Result<>nil then
+    while Result.Left<>nil do Result:=Result.Left;
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.FindHighest: PNode;
+begin
+  Result:=FRoot;
+  if Result<>nil then
+    while Result.Right<>nil do Result:=Result.Right;
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Find(constref AKey: TKey): PNode;
+var
+  LComp: SizeInt;
+begin
+  Result:=FRoot;
+  while (Result<>nil) do
+  begin
+    LComp:=Compare(AKey,Result.Key);
+    if LComp=0 then
+      Exit;
+    if LComp<0 then
+      Result:=Result.Left
+    else
+      Result:=Result.Right
+  end;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.ConsistencyCheck;
+var
+  RealCount: SizeInt;
+begin
+  RealCount:=0;
+  if FRoot<>nil then begin
+    FRoot.ConsistencyCheck(Self);
+    RealCount:=FRoot.GetCount;
+  end;
+  if Count<>RealCount then
+    raise EAVLTree.Create('Count<>RealCount');
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.WriteTreeNode(AStream: TStream; ANode: PNode);
+var
+  b: String;
+  IsLeft: boolean;
+  LParent: PNode;
+  WasLeft: Boolean;
+begin
+  if ANode=nil then exit;
+  WriteTreeNode(AStream, ANode.Right);
+  LParent:=ANode;
+  WasLeft:=false;
+  b:='';
+  while LParent<>nil do begin
+    if LParent.Parent=nil then begin
+      if LParent=ANode then
+        b:='--'+b
+      else
+        b:='  '+b;
+      break;
+    end;
+    IsLeft:=LParent.Parent.Left=LParent;
+    if LParent=ANode then begin
+      if IsLeft then
+        b:='\-'
+      else
+        b:='/-';
+    end else begin
+      if WasLeft=IsLeft then
+        b:='  '+b
+      else
+        b:='| '+b;
+    end;
+    WasLeft:=IsLeft;
+    LParent:=LParent.Parent;
+  end;
+  b:=b+NodeToReportStr(ANode)+LineEnding;
+  WriteStr(AStream, b);
+  WriteTreeNode(AStream, ANode.Left);
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.WriteReportToStream(AStream: TStream);
+begin
+  WriteStr(AStream, '-Start-of-AVL-Tree-------------------'+LineEnding);
+  WriteTreeNode(AStream, fRoot);
+  WriteStr(AStream, '-End-Of-AVL-Tree---------------------'+LineEnding);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.NodeToReportStr(ANode: PNode): string;
+begin
+  Result:=Format(' Self=%p  Parent=%p  Balance=%d', [ANode, ANode.Parent, ANode.Balance]);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.ReportAsString: string;
+var ms: TMemoryStream;
+begin
+  Result:='';
+  ms:=TMemoryStream.Create;
+  try
+    WriteReportToStream(ms);
+    ms.Position:=0;
+    SetLength(Result,ms.Size);
+    if Result<>'' then
+      ms.Read(Result[1],length(Result));
+  finally
+    ms.Free;
+  end;
+end;
+
+{ TAVLTreeMap<TKey, TValue> }
+
+function TAVLTreeMap<TKey, TValue>.AddNode: PNode;
+begin
+  Result := New(PNode);
+  Result^ := Default(TNode);
+end;
+
+procedure TAVLTreeMap<TKey, TValue>.DeleteNode(ANode: PNode; ADispose: boolean = true);
+begin
+  if ADispose then
+    Dispose(ANode);
+end;
+
+{ TIndexedAVLTreeMap<TKey, TValue> }
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.RotateRightRight(ANode: PNode);
+var
+  LOldRight: PNode;
+begin
+  LOldRight:=ANode.Right;
+  inherited;
+  Inc(LOldRight.Data.Info, (1 + ANode.Data.Info));
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.RotateLeftLeft(ANode: PNode);
+var
+  LOldLeft: PNode;
+begin
+  LOldLeft:=ANode.Left;
+  inherited;
+  Dec(ANode.Data.Info, (1 + LOldLeft.Data.Info));
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.RotateRightLeft(ANode: PNode);
+var
+  LB, LC: PNode;
+begin
+  LB := ANode.Right;
+  LC := LB.Left;
+  inherited;
+  Dec(LB.Data.Info, 1+LC.Info);
+  Inc(LC.Data.Info, 1+ANode.Info);
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.RotateLeftRight(ANode: PNode);
+var
+  LB, LC: PNode;
+begin
+  LB := ANode.Left;
+  LC := LB.Right;
+  inherited;
+  Inc(LC.Data.Info, 1+LB.Info);
+  Dec(ANode.Data.Info, 1+LC.Info);
+end;
+
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.NodeAdded(ANode: PNode);
+var
+  LParent, LNode: PNode;
+begin
+  FLastNode := nil;
+  LNode := ANode;
+  repeat
+    LParent:=LNode.Parent;
+    if (LParent=nil) then break;
+    if LParent.Left=LNode then
+      Inc(LParent.Data.Info);
+    LNode:=LParent;
+  until false;
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.DeletingNode(ANode: PNode; AOrigin: boolean);
+var
+  LParent: PNode;
+begin
+  if not AOrigin then
+    Dec(ANode.Data.Info);
+  FLastNode := nil;
+  repeat
+    LParent:=ANode.Parent;
+    if (LParent=nil) then exit;
+    if LParent.Left=ANode then
+      Dec(LParent.Data.Info);
+    ANode:=LParent;
+  until false;
+end;
+
+function TIndexedAVLTreeMap<TKey, TValue>.AddNode: PNode;
+begin
+  Result := PNode(New(PNode));
+  Result^ := Default(TNode);
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.DeleteNode(ANode: PNode; ADispose: boolean = true);
+begin
+  if ADispose then
+    Dispose(ANode);
+end;
+
+function TIndexedAVLTreeMap<TKey, TValue>.GetNodeAtIndex(AIndex: SizeInt): PNode;
+begin
+  if (AIndex<0) or (AIndex>=Count) then
+    raise EIndexedAVLTree.CreateFmt('TIndexedAVLTree: AIndex %d out of bounds 0..%d', [AIndex, Count]);
+
+  if FLastNode<>nil then begin
+    if AIndex=FLastIndex then
+      Exit(FLastNode)
+    else if AIndex=FLastIndex+1 then begin
+      FLastIndex:=AIndex;
+      FLastNode:=FLastNode.Successor;
+      Exit(FLastNode);
+    end else if AIndex=FLastIndex-1 then begin
+      FLastIndex:=AIndex;
+      FLastNode:=FLastNode.Precessor;
+      Exit(FLastNode);
+    end;
+  end;
+
+  FLastIndex:=AIndex;
+  Result:=FRoot;
+  repeat
+    if Result.Info>AIndex then
+      Result:=Result.Left
+    else if Result.Info=AIndex then begin
+      FLastNode:=Result;
+      Exit;
+    end
+    else begin
+      Dec(AIndex, Result.Info+1);
+      Result:=Result.Right;
+    end;
+  until false;
+end;
+
+function TIndexedAVLTreeMap<TKey, TValue>.NodeToIndex(ANode: PNode): SizeInt;
+var
+  LNode: PNode;
+  LParent: PNode;
+begin
+  if ANode=nil then
+    Exit(-1);
+
+  if FLastNode=ANode then
+    Exit(FLastIndex);
+
+  LNode:=ANode;
+  Result:=LNode.Info;
+  repeat
+    LParent:=LNode.Parent;
+    if LParent=nil then break;
+    if LParent.Right=LNode then
+      inc(Result,LParent.Info+1);
+    LNode:=LParent;
+  until false;
+
+  FLastNode:=ANode;
+  FLastIndex:=Result;
+end;
+
+procedure TIndexedAVLTreeMap<TKey, TValue>.ConsistencyCheck;
+var
+  LNode: PNode;
+  i: SizeInt;
+  LeftCount: SizeInt = 0;
+begin
+  inherited ConsistencyCheck;
+  i:=0;
+  for LNode in Self.Nodes do
+  begin
+    if LNode.Left<>nil then
+      LeftCount:=LNode.Left.GetCount
+    else
+      LeftCount:=0;
+
+    if LNode.Info<>LeftCount then
+      raise EIndexedAVLTree.CreateFmt('LNode.LeftCount=%d<>%d',[LNode.Info,LeftCount]);
+
+    if GetNodeAtIndex(i)<>LNode then
+      raise EIndexedAVLTree.CreateFmt('GetNodeAtIndex(%d)<>%P',[i,LNode]);
+    FLastNode:=nil;
+    if GetNodeAtIndex(i)<>LNode then
+      raise EIndexedAVLTree.CreateFmt('GetNodeAtIndex(%d)<>%P',[i,LNode]);
+
+    if NodeToIndex(LNode)<>i then
+      raise EIndexedAVLTree.CreateFmt('NodeToIndex(%P)<>%d',[LNode,i]);
+    FLastNode:=nil;
+    if NodeToIndex(LNode)<>i then
+      raise EIndexedAVLTree.CreateFmt('NodeToIndex(%P)<>%d',[LNode,i]);
+
+    inc(i);
+  end;
+end;
+
+function TIndexedAVLTreeMap<TKey, TValue>.NodeToReportStr(ANode: PNode): string;
+begin
+  Result:=Format(' Self=%p  Parent=%p  Balance=%d Idx=%d Info=%d',
+             [ANode,ANode.Parent, ANode.Balance, NodeToIndex(ANode), ANode.Info]);
+end;
+
+{ TAVLTree<T> }
+
+function TAVLTree<T>.Add(constref AValue: T): PNode;
+begin
+  Result := inherited Add(AValue, EmptyRecord);
+end;
+
+{ TIndexedAVLTree<T> }
+
+function TIndexedAVLTree<T>.Add(constref AValue: T): PNode;
+begin
+  Result := inherited Add(AValue, EmptyRecord);
 end;
 
 end.
