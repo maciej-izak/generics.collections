@@ -14,6 +14,14 @@
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
+    Acknowledgment
+
+    Thanks to Sphere 10 Software (http://sphere10.com) for sponsoring
+    many new types and major refactoring of entire library
+
+    Thanks to mORMot (http://synopse.info) project for the best implementations
+    of hashing functions like crc32c and xxHash32 :)
+
  **********************************************************************}
 
 unit Generics.Collections;
