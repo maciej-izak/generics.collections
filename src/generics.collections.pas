@@ -134,6 +134,10 @@ type
   { TEnumerable }
 
   TEnumerable<T> = class abstract
+  public type
+    PT = ^T;
+  protected // no forward generics declarations (needed by TPointersCollection<T, PT>), this should be moved into TEnumerableWithPointers
+    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; virtual; abstract;
   protected
     function ToArrayImpl(ACount: SizeInt): TArray<T>; overload; // used by descendants
   protected
@@ -142,6 +146,28 @@ type
     function GetEnumerator: TEnumerator<T>; inline;
     function ToArray: TArray<T>; virtual; overload;
   end;
+
+  TCustomPointersEnumerator<T, PT> = class abstract(TEnumerator<PT>);
+
+  TCustomPointersCollection<T, PT> = record
+  private
+    FEnumerable: TEnumerable<T>;
+  public
+    function GetEnumerator: TEnumerator<PT>;
+  end;
+
+  TEnumerableWithPointers<T> = class(TEnumerable<T>)
+  public type
+    TPointersCollection = TCustomPointersCollection<T, PT>;
+  protected
+    FPtr: TPointersCollection;
+
+    procedure InitializeEnumerable; virtual;
+  public
+    constructor Create; virtual;
+    property Ptr: TPointersCollection read FPtr;
+  end;
+
 
   // More info: http://stackoverflow.com/questions/5232198/about-vectors-growth
   // TODO: custom memory managers (as constraints)
@@ -479,49 +505,76 @@ type
 
 {$I inc\generics.dictionariesh.inc}
 
-  { THashSet }
+  { TCustomHashSet<T> }
 
-  THashSet<T> = class(TEnumerable<T>)
-  protected
-    FInternalDictionary : TOpenAddressingLP<T, TEmptyRecord>;
-    function DoGetEnumerator: TEnumerator<T>; override;
-    procedure InitializeSet; virtual;
+  TCustomHashSet<T> = class(TEnumerableWithPointers<T>)
   public type
-    THashSetEnumerator = class(TEnumerator<T>)
-    protected type
-      TDictionaryEnumerator = TDictionary<T, TEmptyRecord>.TKeyEnumerator;
+    PT = ^T;
+  protected type
+    TCustomHashSetEnumerator = class(TEnumerator<T>)
     protected var
-      FEnumerator: TObject;
+      FEnumerator: TEnumerator<T>;
       function DoMoveNext: boolean; override;
       function DoGetCurrent: T; override;
-      function GetCurrent: T; virtual;
+      function GetCurrent: T; virtual; abstract;
     public
-      constructor Create(ASet: THashSet<T>);
+      constructor Create(ASet: TCustomHashSet<T>); virtual; abstract;
       destructor Destroy; override;
     end;
-  private
-    function GetCount: SizeInt; inline;
-    function GetPointers: TDictionary<T, TEmptyRecord>.TKeyCollection.PPointersCollection; inline;
-  public type
-    //TEnumerator = TSetEnumerator;
-    PT = ^T;
-
-    function GetEnumerator: THashSetEnumerator; reintroduce; virtual;
+  protected
+    function DoGetEnumerator: TEnumerator<T>; override;
+    function GetCount: SizeInt; virtual; abstract;
   public
-    constructor Create; virtual; overload;
-    constructor Create(const AComparer: IEqualityComparer<T>); virtual; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
-    destructor Destroy; override;
-    function Add(constref AValue: T): Boolean; virtual;
-    function Remove(constref AValue: T): Boolean; virtual;
-    procedure Clear;
-    function Contains(constref AValue: T): Boolean; inline;
-    procedure UnionWith(AHashSet: THashSet<T>);
-    procedure IntersectWith(AHashSet: THashSet<T>);
-    procedure ExceptWith(AHashSet: THashSet<T>);
-    procedure SymmetricExceptWith(AHashSet: THashSet<T>);
+    function GetEnumerator: TCustomHashSetEnumerator; reintroduce; virtual; abstract;
+
+    function Add(constref AValue: T): Boolean; virtual; abstract;
+    function Remove(constref AValue: T): Boolean; virtual; abstract;
+    procedure Clear; virtual; abstract;
+    function Contains(constref AValue: T): Boolean; virtual; abstract;
+    procedure UnionWith(AHashSet: TCustomHashSet<T>);
+    procedure IntersectWith(AHashSet: TCustomHashSet<T>);
+    procedure ExceptWith(AHashSet: TCustomHashSet<T>);
+    procedure SymmetricExceptWith(AHashSet: TCustomHashSet<T>);
+
     property Count: SizeInt read GetCount;
-    property Ptr: TDictionary<T, TEmptyRecord>.TKeyCollection.PPointersCollection read GetPointers;
+  end;
+
+  { THashSet<T> }
+
+  THashSet<T> = class(TCustomHashSet<T>)
+  protected
+    FInternalDictionary: TOpenAddressingLP<T, TEmptyRecord>;
+  public type
+    THashSetEnumerator = class(TCustomHashSetEnumerator)
+    protected type
+      TDictionaryEnumerator = TDictionary<T, TEmptyRecord>.TKeyEnumerator;
+      function GetCurrent: T; override;
+    public
+      constructor Create(ASet: TCustomHashSet<T>); override;
+    end;
+
+    TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
+    protected
+      FEnumerator: TDictionary<T, TEmptyRecord>.TPKeyEnumerator;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: PT; override;
+    public
+      constructor Create(AHashSet: THashSet<T>);
+    end;
+  protected
+    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetCount: SizeInt; override;
+  public
+    constructor Create; override; overload;
+    constructor Create(const AComparer: IEqualityComparer<T>); virtual; overload;
+    destructor Destroy; override;
+    function GetEnumerator: TCustomHashSetEnumerator; override;
+
+    function Add(constref AValue: T): Boolean; override;
+    function Remove(constref AValue: T): Boolean; override;
+    procedure Clear; override;
+    function Contains(constref AValue: T): Boolean; override;
   end;
 
   TPair<TKey, TValue, TInfo> = record
@@ -559,7 +612,6 @@ type
     function GetCurrent: T; virtual; abstract;
   public
     constructor Create(ATree: TObject);
-    function MoveNext: Boolean; virtual; abstract;
     property Current: T read GetCurrent;
   end;
 
@@ -608,6 +660,8 @@ type
     TNode = TAVLTreeNode<TREE_CONSTRAINTS, TTree>;
     PNode = ^TNode;
     TTreePair = TPair<TKey, TValue>;
+    PKey = ^TKey;
+    PValue = ^TValue;
   private type
     PPNode = ^PNode;
     // type exist only for generic constraint in TNodeCollection (non functional - PPNode has no sense)
@@ -617,6 +671,8 @@ type
   protected
     FCount: SizeInt;
     FRoot: PNode;
+    FKeys: TEnumerable<TKey>;
+    FValues: TEnumerable<TValue>;
     procedure NodeAdded(ANode: PNode); virtual;
     procedure DeletingNode(ANode: PNode; AOrigin: boolean); virtual;
 
@@ -652,9 +708,19 @@ type
       function GetCurrent: TKey; override;
     end;
 
+    TPKeyEnumerator = class(TAVLTreeEnumerator<PKey, PNode, TTree>)
+    protected
+      function GetCurrent: PKey; override;
+    end;
+
     TValueEnumerator = class(TAVLTreeEnumerator<TValue, PNode, TTree>)
     protected
       function GetCurrent: TValue; override;
+    end;
+
+    TPValueEnumerator = class(TAVLTreeEnumerator<PValue, PNode, TTree>)
+    protected
+      function GetCurrent: PValue; override;
     end;
 
     TNodeCollection = class(TTreeEnumerable<TNodeEnumerator, TPNodeEnumerator, PNode, PPNode, PNode, TTree>)
@@ -662,12 +728,19 @@ type
       property Ptr; // PPNode has no sense, so hide enumerator for PPNode
     end;
 
+    TKeyCollection = class(TTreeEnumerable<TKeyEnumerator, TPKeyEnumerator, TKey, PKey, PNode, TTree>);
+
+    TValueCollection = class(TTreeEnumerable<TValueEnumerator, TPValueEnumerator, TValue, PValue, PNode, TTree>);
   private
     FNodes: TNodeCollection;
     function GetNodeCollection: TNodeCollection;
     procedure InternalDelete(ANode: PNode);
+    function GetKeys: TKeyCollection;
+    function GetValues: TValueCollection;
   public
-    constructor Create; virtual;
+    constructor Create; virtual; overload;
+    constructor Create(const AComparer: IComparer<TKey>); virtual; overload;
+
     destructor Destroy; override;
     function Add(constref AKey: TKey; constref AValue: TValue): PNode;
     function Remove(constref AKey: TKey): boolean;
@@ -678,18 +751,21 @@ type
 
     procedure Clear(ADisposeNodes: Boolean = true); virtual;
 
-    function FindLowest: PNode; // O(log(n))
-    function FindHighest: PNode; // O(log(n))
+    function FindLowest: PNode;
+    function FindHighest: PNode;
 
     property Count: SizeInt read FCount;
     property Root: PNode read FRoot;
-    function Find(constref AKey: TKey): PNode; // O(log(n))
+    function Find(constref AKey: TKey): PNode;
 
     procedure ConsistencyCheck; virtual;
     procedure WriteTreeNode(AStream: TStream; ANode: PNode);
     procedure WriteReportToStream(AStream: TStream);
     function NodeToReportStr(ANode: PNode): string; virtual;
     function ReportAsString: string;
+
+    property Keys: TKeyCollection read GetKeys;
+    property Values: TValueCollection read GetValues;
   end;
 
   TAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, TEmptyRecord>)
@@ -731,31 +807,56 @@ type
     function Add(constref AValue: T): PNode; reintroduce;
   end;
 
-  TSortedHashSet<T> = class(THashSet<T>)
-  protected
+  TSortedHashSet<T> = class(TCustomHashSet<T>)
+  public//protected
+    FInternalDictionary: TOpenAddressingLP<PT, TEmptyRecord>;
     FInternalTree: TAVLTree<T>;
     function DoGetEnumerator: TEnumerator<T>; override;
-    procedure InitializeSet; override;
-  public type
-    TSortedHashSetEnumerator = class(THashSetEnumerator)
-    protected type
-      TTreeEnumerator = TAVLTree<T>.TNodeEnumerator;
-      function DoMoveNext: boolean; override;
-      function DoGetCurrent: T; override;
-      function GetCurrent: T; virtual;
+    procedure InitializeEnumerable; override;
+    function GetCount: SizeInt; override;
+  protected type
+    TSortedHashSetEqualityComparer = class(TInterfacedObject, IEqualityComparer<PT>)
+    private
+      FComparer: IComparer<T>;
+      FEqualityComparer: IEqualityComparer<T>;
+      function Equals(constref ALeft, ARight: PT): Boolean;
+      function GetHashCode(constref AValue: PT): UInt32;
     public
-      constructor Create(ASet: TSortedHashSet<T>);
-      destructor Destroy; override;
+      constructor Create(const AComparer: IComparer<T>); overload;
+      constructor Create(const AEqualityComparer: IEqualityComparer<T>); overload;
+      constructor Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>); overload;
     end;
-  public // type
-    //TEnumerator = TSetEnumerator;
+  public type
+    TSortedHashSetEnumerator = class(TCustomHashSetEnumerator)
+    protected type
+      TTreeEnumerator = TAVLTree<T>.TKeyEnumerator;
+      function GetCurrent: T; override;
+    public
+      constructor Create(ASet: TCustomHashSet<T>); override;
+    end;
 
-    function GetEnumerator: THashSetEnumerator; override;
+    TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
+    protected
+      FEnumerator: TAVLTree<T>.TPKeyEnumerator;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: PT; override;
+    public
+      constructor Create(ASortedHashSet: TSortedHashSet<T>);
+    end;
+  protected
+    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
   public
+    constructor Create; override; overload;
+    constructor Create(const AComparer: IEqualityComparer<T>); overload;
+    constructor Create(const AComparer: IComparer<T>); overload;
+    constructor Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>); overload;
+    destructor Destroy; override;
+    function GetEnumerator: TCustomHashSetEnumerator; override;
+
     function Add(constref AValue: T): Boolean; override;
     function Remove(constref AValue: T): Boolean; override;
-
-    destructor Destroy; override;
+    procedure Clear; override;
+    function Contains(constref AValue: T): Boolean; override;
   end;
 
 function InCircularRange(ABottom, AItem, ATop: SizeInt): Boolean;
@@ -992,6 +1093,25 @@ begin
     LBuffer.Free;
     LEnumerator.Free;
   end;
+end;
+
+{ TCustomPointersCollection<T, PT> }
+
+function TCustomPointersCollection<T, PT>.GetEnumerator: TEnumerator<PT>;
+begin
+  Result := FEnumerable.GetPtrEnumerator;
+end;
+
+{ TEnumerableWithPointers<T> }
+
+procedure TEnumerableWithPointers<T>.InitializeEnumerable;
+begin
+  FPtr.FEnumerable := Self;
+end;
+
+constructor TEnumerableWithPointers<T>.Create;
+begin
+  InitializeEnumerable;
 end;
 
 { TCustomList<T> }
@@ -2106,42 +2226,125 @@ end;
 
 {$I inc\generics.dictionaries.inc}
 
+{ TCustomHashSet<T>.TCustomHashSetEnumerator }
+
+function TCustomHashSet<T>.TCustomHashSetEnumerator.DoMoveNext: boolean;
+begin
+  Result := FEnumerator.DoMoveNext;
+end;
+
+function TCustomHashSet<T>.TCustomHashSetEnumerator.DoGetCurrent: T;
+begin
+  Result := FEnumerator.DoGetCurrent;
+end;
+
+destructor TCustomHashSet<T>.TCustomHashSetEnumerator.Destroy;
+begin
+  FEnumerator.Free;
+end;
+
+{ TCustomHashSet<T> }
+
+function TCustomHashSet<T>.DoGetEnumerator: Generics.Collections.TEnumerator<T>;
+begin
+  Result := GetEnumerator;
+end;
+
+constructor TCustomHashSet<T>.Create(ACollection: TEnumerable<T>);
+var
+  i: T;
+begin
+  Create;
+  for i in ACollection do
+    Add(i);
+end;
+
+procedure TCustomHashSet<T>.UnionWith(AHashSet: TCustomHashSet<T>);
+var
+  i: PT;
+begin
+  for i in AHashSet.Ptr do
+    Add(i^);
+end;
+
+procedure TCustomHashSet<T>.IntersectWith(AHashSet: TCustomHashSet<T>);
+var
+  LList: TList<PT>;
+  i: PT;
+begin
+  LList := TList<PT>.Create;
+
+  for i in Ptr do
+    if not AHashSet.Contains(i^) then
+      LList.Add(i);
+
+  for i in LList do
+    Remove(i^);
+
+  LList.Free;
+end;
+
+procedure TCustomHashSet<T>.ExceptWith(AHashSet: TCustomHashSet<T>);
+var
+  i: PT;
+begin
+  for i in AHashSet.Ptr do
+    Remove(i^);
+end;
+
+procedure TCustomHashSet<T>.SymmetricExceptWith(AHashSet: TCustomHashSet<T>);
+var
+  LList: TList<PT>;
+  i: PT;
+begin
+  LList := TList<PT>.Create;
+
+  for i in AHashSet.Ptr do
+    if Contains(i^) then
+      LList.Add(i)
+    else
+      Add(i^);
+
+  for i in LList do
+    Remove(i^);
+
+  LList.Free;
+end;
+
 { THashSet<T>.THashSetEnumerator }
-
-function THashSet<T>.THashSetEnumerator.DoMoveNext: boolean;
-begin
-  Result := TDictionaryEnumerator(FEnumerator).DoMoveNext;
-end;
-
-function THashSet<T>.THashSetEnumerator.DoGetCurrent: T;
-begin
-  Result := TDictionaryEnumerator(FEnumerator).DoGetCurrent;
-end;
 
 function THashSet<T>.THashSetEnumerator.GetCurrent: T;
 begin
   Result := TDictionaryEnumerator(FEnumerator).GetCurrent;
 end;
 
-constructor THashSet<T>.THashSetEnumerator.Create(ASet: THashSet<T>);
+constructor THashSet<T>.THashSetEnumerator.Create(ASet: TCustomHashSet<T>);
 begin
-  TDictionaryEnumerator(FEnumerator) := ASet.FInternalDictionary.Keys.DoGetEnumerator;
+  TDictionaryEnumerator(FEnumerator) := THashSet<T>(ASet).FInternalDictionary.Keys.DoGetEnumerator;
 end;
 
-destructor THashSet<T>.THashSetEnumerator.Destroy;
+{ THashSet<T>.TPointersEnumerator }
+
+function THashSet<T>.TPointersEnumerator.DoMoveNext: boolean;
 begin
-  FEnumerator.Free;
+  Result := FEnumerator.MoveNext;
 end;
 
-{ THashSet<T>.TEnumerator }
-
-function THashSet<T>.DoGetEnumerator: Generics.Collections.TEnumerator<T>;
+function THashSet<T>.TPointersEnumerator.DoGetCurrent: PT;
 begin
-  Result := GetEnumerator;
+  Result := FEnumerator.Current;
 end;
 
-procedure THashSet<T>.InitializeSet;
+constructor THashSet<T>.TPointersEnumerator.Create(AHashSet: THashSet<T>);
 begin
+  FEnumerator := AHashSet.FInternalDictionary.Keys.Ptr^.GetEnumerator;
+end;
+
+{ THashSet<T> }
+
+function THashSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+begin
+  Result := TPointersEnumerator.Create(Self);
 end;
 
 function THashSet<T>.GetCount: SizeInt;
@@ -2149,35 +2352,21 @@ begin
   Result := FInternalDictionary.Count;
 end;
 
-function THashSet<T>.GetPointers: TDictionary<T, TEmptyRecord>.TKeyCollection.PPointersCollection;
-begin
-  Result := FInternalDictionary.Keys.Ptr;
-end;
-
-function THashSet<T>.GetEnumerator: THashSetEnumerator;
+function THashSet<T>.GetEnumerator: TCustomHashSetEnumerator;
 begin
   Result := THashSetEnumerator.Create(Self);
 end;
 
 constructor THashSet<T>.Create;
 begin
-  InitializeSet;
+  inherited;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create;
 end;
 
 constructor THashSet<T>.Create(const AComparer: IEqualityComparer<T>);
 begin
-  InitializeSet;
+  inherited Create;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create(AComparer);
-end;
-
-constructor THashSet<T>.Create(ACollection: TEnumerable<T>);
-var
-  i: T;
-begin
-  Create;
-  for i in ACollection do
-    Add(i);
 end;
 
 destructor THashSet<T>.Destroy;
@@ -2210,58 +2399,6 @@ end;
 function THashSet<T>.Contains(constref AValue: T): Boolean;
 begin
   Result := FInternalDictionary.ContainsKey(AValue);
-end;
-
-procedure THashSet<T>.UnionWith(AHashSet: THashSet<T>);
-var
-  i: PT;
-begin
-  for i in AHashSet.Ptr^ do
-    Add(i^);
-end;
-
-procedure THashSet<T>.IntersectWith(AHashSet: THashSet<T>);
-var
-  LList: TList<PT>;
-  i: PT;
-begin
-  LList := TList<PT>.Create;
-
-  for i in Ptr^ do
-    if not AHashSet.Contains(i^) then
-      LList.Add(i);
-
-  for i in LList do
-    Remove(i^);
-
-  LList.Free;
-end;
-
-procedure THashSet<T>.ExceptWith(AHashSet: THashSet<T>);
-var
-  i: PT;
-begin
-  for i in AHashSet.Ptr^ do
-    FInternalDictionary.Remove(i^);
-end;
-
-procedure THashSet<T>.SymmetricExceptWith(AHashSet: THashSet<T>);
-var
-  LList: TList<PT>;
-  i: PT;
-begin
-  LList := TList<PT>.Create;
-
-  for i in AHashSet.Ptr^ do
-    if Contains(i^) then
-      LList.Add(i)
-    else
-      Add(i^);
-
-  for i in LList do
-    Remove(i^);
-
-  LList.Free;
 end;
 
 { TAVLTreeNode<TREE_CONSTRAINTS, TTree> }
@@ -2382,7 +2519,7 @@ function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode,
   TPointersCollection.{Do}GetEnumerator: TTreePointersEnumerator;
 begin
   Result := TTreePointersEnumerator(TTreePointersEnumerator.NewInstance);
-  TCustomTreeEnumerator<PT, PNode, TTree>(Result).Create(Tree);
+  TTreePointersEnumerator(Result).Create(Tree);
 end;
 
 function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
@@ -2416,7 +2553,7 @@ end;
 
 function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPointers: PPointersCollection;
 begin
-  Result := @FPointers;
+  Result := @FTree;
 end;
 
 constructor TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.Create(
@@ -2482,11 +2619,25 @@ begin
   Result := FCurrent.Key;
 end;
 
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TPKeyEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TPKeyEnumerator.GetCurrent: PKey;
+begin
+  Result := @FCurrent.Data.Key;
+end;
+
 { TCustomAVLTreeMap<TREE_CONSTRAINTS>.TValueEnumerator }
 
 function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TValueEnumerator.GetCurrent: TValue;
 begin
   Result := FCurrent.Value;
+end;
+
+{ TCustomAVLTreeMap<TREE_CONSTRAINTS>.TValueEnumerator }
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.TPValueEnumerator.GetCurrent: PValue;
+begin
+  Result := @FCurrent.Data.Value;
 end;
 
 { TCustomAVLTreeMap<TREE_CONSTRAINTS> }
@@ -2820,9 +2971,28 @@ begin
   end;
 end;
 
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.GetKeys: TKeyCollection;
+begin
+  if not Assigned(FKeys) then
+    FKeys := TKeyCollection.Create(TTree(Self));
+  Result := TKeyCollection(FKeys);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.GetValues: TValueCollection;
+begin
+  if not Assigned(FValues) then
+    FValues := TValueCollection.Create(TTree(Self));
+  Result := TValueCollection(FValues);
+end;
+
 constructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Create;
 begin
   FComparer := TComparer<TKey>.Default;
+end;
+
+constructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Create(const AComparer: IComparer<TKey>);
+begin
+  FComparer := AComparer;
 end;
 
 destructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Destroy;
@@ -3285,67 +3455,159 @@ begin
   Result := inherited Add(AValue, EmptyRecord);
 end;
 
+{ TSortedHashSet<T>.TSortedHashSetEqualityComparer }
+
+function TSortedHashSet<T>.TSortedHashSetEqualityComparer.Equals(constref ALeft, ARight: PT): Boolean;
+begin
+  if Assigned(FComparer) then
+    Result := FComparer.Compare(ALeft^, ARight^) = 0
+  else
+    Result := FEqualityComparer.Equals(ALeft^, ARight^);
+end;
+
+function TSortedHashSet<T>.TSortedHashSetEqualityComparer.GetHashCode(constref AValue: PT): UInt32;
+begin
+  Result := FEqualityComparer.GetHashCode(AValue^);
+end;
+
+constructor TSortedHashSet<T>.TSortedHashSetEqualityComparer.Create(const AComparer: IComparer<T>);
+begin
+  FComparer := AComparer;
+  FEqualityComparer := TEqualityComparer<T>.Default;
+end;
+
+constructor TSortedHashSet<T>.TSortedHashSetEqualityComparer.Create(const AEqualityComparer: IEqualityComparer<T>);
+begin
+  FEqualityComparer := AEqualityComparer;
+end;
+
+constructor TSortedHashSet<T>.TSortedHashSetEqualityComparer.Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>);
+begin
+  FComparer := AComparer;
+  FEqualityComparer := AEqualityComparer;
+end;
+
 { TSortedHashSet<T>.TSortedHashSetEnumerator }
-
-function TSortedHashSet<T>.TSortedHashSetEnumerator.DoMoveNext: boolean;
-begin
-  Result := TTreeEnumerator(FEnumerator).DoMoveNext;
-end;
-
-function TSortedHashSet<T>.TSortedHashSetEnumerator.DoGetCurrent: T;
-begin
-  Result := TTreeEnumerator(FEnumerator).DoGetCurrent.Key;
-end;
 
 function TSortedHashSet<T>.TSortedHashSetEnumerator.GetCurrent: T;
 begin
-  Result := TTreeEnumerator(FEnumerator).GetCurrent.Key;
+  Result := TTreeEnumerator(FEnumerator).Current;
 end;
 
-constructor TSortedHashSet<T>.TSortedHashSetEnumerator.Create(ASet: TSortedHashSet<T>);
+constructor TSortedHashSet<T>.TSortedHashSetEnumerator.Create(ASet: TCustomHashSet<T>);
 begin
-  FEnumerator := ASet.FInternalTree.Nodes.DoGetEnumerator;
+  FEnumerator := TSortedHashSet<T>(ASet).FInternalTree.Keys.GetEnumerator;
 end;
 
-destructor TSortedHashSet<T>.TSortedHashSetEnumerator.Destroy;
+{ TSortedHashSet<T>.TPointersEnumerator }
+
+function TSortedHashSet<T>.TPointersEnumerator.DoMoveNext: boolean;
 begin
-  FEnumerator.Free;
+  Result := FEnumerator.MoveNext;
+end;
+
+function TSortedHashSet<T>.TPointersEnumerator.DoGetCurrent: PT;
+begin
+  Result := FEnumerator.Current;
+end;
+
+constructor TSortedHashSet<T>.TPointersEnumerator.Create(ASortedHashSet: TSortedHashSet<T>);
+begin
+  FEnumerator := ASortedHashSet.FInternalTree.Keys.Ptr^.GetEnumerator;
 end;
 
 { TSortedHashSet<T> }
+
+function TSortedHashSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+begin
+  Result := TPointersEnumerator.Create(Self);
+end;
 
 function TSortedHashSet<T>.DoGetEnumerator: TEnumerator<T>;
 begin
   Result := GetEnumerator;
 end;
 
-procedure TSortedHashSet<T>.InitializeSet;
+procedure TSortedHashSet<T>.InitializeEnumerable;
 begin
   inherited;
-  FInternalTree := TAVLTree<T>.Create;
 end;
 
-function TSortedHashSet<T>.GetEnumerator: THashSetEnumerator;
+function TSortedHashSet<T>.GetCount: SizeInt;
+begin
+  Result := FInternalDictionary.Count;
+end;
+
+function TSortedHashSet<T>.GetEnumerator: TCustomHashSetEnumerator;
 begin
   Result := TSortedHashSetEnumerator.Create(Self);
 end;
 
 function TSortedHashSet<T>.Add(constref AValue: T): Boolean;
+var
+  LNode: TAVLTree<T>.PNode;
 begin
-  Result := inherited;
+  Result := not FInternalDictionary.ContainsKey(@AValue);
   if Result then
-    FInternalTree.Add(AValue);
+  begin
+    LNode := FInternalTree.Add(AValue);
+    FInternalDictionary.Add(@LNode.Data.Key, EmptyRecord);
+  end;
 end;
 
 function TSortedHashSet<T>.Remove(constref AValue: T): Boolean;
+var
+  LIndex: SizeInt;
 begin
-  Result := inherited;
+  LIndex := FInternalDictionary.FindBucketIndex(@AValue);
+  Result := LIndex >= 0;
   if Result then
+  begin
+    FInternalDictionary.DoRemove(LIndex, cnRemoved);
     FInternalTree.Remove(AValue);
+  end;
+end;
+
+procedure TSortedHashSet<T>.Clear;
+begin
+  FInternalDictionary.Clear;
+  FInternalTree.Clear;
+end;
+
+function TSortedHashSet<T>.Contains(constref AValue: T): Boolean;
+begin
+  Result := FInternalDictionary.ContainsKey(@AValue);
+end;
+
+constructor TSortedHashSet<T>.Create;
+begin
+  inherited;
+  FInternalTree := TAVLTree<T>.Create;
+  FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(TEqualityComparer<T>.Default));
+end;
+
+constructor TSortedHashSet<T>.Create(const AComparer: IEqualityComparer<T>);
+begin
+  Create(TComparer<T>.Default, AComparer);
+end;
+
+constructor TSortedHashSet<T>.Create(const AComparer: IComparer<T>);
+begin
+  inherited Create;
+  FInternalTree := TAVLTree<T>.Create(AComparer);
+  FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(AComparer));
+end;
+
+constructor TSortedHashSet<T>.Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>);
+begin
+  inherited Create;
+  FInternalTree := TAVLTree<T>.Create(AComparer);
+  FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(AComparer,AEqualityComparer));
 end;
 
 destructor TSortedHashSet<T>.Destroy;
 begin
+  FInternalDictionary.Free;
   FInternalTree.Free;
   inherited;
 end;
