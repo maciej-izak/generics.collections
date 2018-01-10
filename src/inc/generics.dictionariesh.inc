@@ -140,7 +140,7 @@ type
 
   // more info : http://en.wikipedia.org/wiki/Open_addressing
 
-  { TDictionaryEnumerable }
+  { TOpenAddressingEnumerator }
 
   TOpenAddressingEnumerator<T, OPEN_ADDRESSING_CONSTRAINTS> = class abstract(TCustomDictionaryEnumerator<T, CUSTOM_DICTIONARY_CONSTRAINTS>)
   protected
@@ -415,7 +415,7 @@ type
     end;
     TValueForQueue = TItem;
 
-    TQueueDictionary = class(TOpenAddressingLP<TKey, TValueForQueue, TDelphiHashFactory, TLinearProbing>)
+    TQueueDictionary = class(TOpenAddressingLP<TKey, TValueForQueue, TDefaultHashFactory, TLinearProbing>)
     private type // for workaround Lazarus bug #25613
       _TItem = record
         Hash: UInt32;
@@ -436,7 +436,7 @@ type
     end;
 
     // cycle-detection mechanism class
-    TCDM = class(TOpenAddressingSH<TKey, TEmptyRecord, TDelphiHashFactory, TLinearProbing>);
+    TCDM = class(TOpenAddressingSH<TKey, TEmptyRecord, TDefaultHashFactory, TLinearProbing>);
     TItemsArray = array of TItem;
     TItemsDArray = array[0..Pred(TCuckooCfg.D)] of TItemsArray;
     TPointersEnumerator = class(TDeamortizedDArrayPointersEnumerator<TCuckooCfg, TItemsArray, TItemsDArray, TQueueDictionary, PDictionaryPair>);
@@ -594,17 +594,17 @@ type
 
   // useful generics overloads
   TOpenAddressingLP<TKey, TValue, THashFactory> = class(TOpenAddressingLP<TKey, TValue, THashFactory, TLinearProbing>);
-  TOpenAddressingLP<TKey, TValue>  = class(TOpenAddressingLP<TKey, TValue, TDelphiHashFactory, TLinearProbing>);
+  TOpenAddressingLP<TKey, TValue>  = class(TOpenAddressingLP<TKey, TValue, TDefaultHashFactory, TLinearProbing>);
 
   TObjectOpenAddressingLP<TKey, TValue, THashFactory> = class(TObjectOpenAddressingLP<TKey, TValue, THashFactory, TLinearProbing>);
-  TObjectOpenAddressingLP<TKey, TValue> = class(TObjectOpenAddressingLP<TKey, TValue, TDelphiHashFactory, TLinearProbing>);
+  TObjectOpenAddressingLP<TKey, TValue> = class(TObjectOpenAddressingLP<TKey, TValue, TDefaultHashFactory, TLinearProbing>);
 
   // Linear Probing with Tombstones (LPT)
   TOpenAddressingLPT<TKey, TValue, THashFactory> = class(TOpenAddressingSH<TKey, TValue, THashFactory, TLinearProbing>);
-  TOpenAddressingLPT<TKey, TValue> = class(TOpenAddressingSH<TKey, TValue, TDelphiHashFactory, TLinearProbing>);
+  TOpenAddressingLPT<TKey, TValue> = class(TOpenAddressingSH<TKey, TValue, TDefaultHashFactory, TLinearProbing>);
 
   TOpenAddressingQP<TKey, TValue, THashFactory> = class(TOpenAddressingQP<TKey, TValue, THashFactory, TQuadraticProbing>);
-  TOpenAddressingQP<TKey, TValue> = class(TOpenAddressingQP<TKey, TValue, TDelphiHashFactory, TQuadraticProbing>);
+  TOpenAddressingQP<TKey, TValue> = class(TOpenAddressingQP<TKey, TValue, TDefaultHashFactory, TQuadraticProbing>);
 
   TOpenAddressingDH<TKey, TValue, THashFactory> = class(TOpenAddressingDH<TKey, TValue, THashFactory, TDoubleHashing>);
   TOpenAddressingDH<TKey, TValue> = class(TOpenAddressingDH<TKey, TValue, TDelphiDoubleHashFactory, TDoubleHashing>);

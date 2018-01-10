@@ -857,6 +857,12 @@ type
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
+  TmORMotHashFactory = class(THashFactory)
+  public
+    class function GetHashService: THashServiceClass; override;
+    class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
+  end;
+
   { TAdler32HashFactory }
 
   TAdler32HashFactory = class(THashFactory)
@@ -922,7 +928,7 @@ type
     class procedure GetHashList(AKey: Pointer; ASize: SizeInt; AHashList: PUInt32; AOptions: TGetHashListOptions = []); override;
   end;
 
-  TDefaultHashFactory = TDelphiQuadrupleHashFactory;
+  TDefaultHashFactory = TmORMotHashFactory;
 
   TDefaultGenericInterface = (giComparer, giEqualityComparer, giExtendedEqualityComparer);
 
@@ -2782,6 +2788,18 @@ begin
   Result := DelphiHashLittle(AKey, ASize, AInitVal);
 end;
 
+{ TmORMotHashFactory }
+
+class function TmORMotHashFactory.GetHashService: THashServiceClass;
+begin
+  Result := THashService<TmORMotHashFactory>;
+end;
+
+class function TmORMotHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
+begin
+  Result := mORMotHasher(AInitVal, AKey, ASize);
+end;
+
 { TAdler32HashFactory }
 
 class function TAdler32HashFactory.GetHashService: THashServiceClass;
@@ -3255,7 +3273,7 @@ begin
     giEqualityComparer:
       begin
         if AFactory = nil then
-          AFactory := TDelphiHashFactory;
+          AFactory := TDefaultHashFactory;
 
         Exit(
           AFactory.GetHashService.LookupEqualityComparer(ATypeInfo, ASize));
