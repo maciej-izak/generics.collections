@@ -942,6 +942,15 @@ end;
   {$endif}
 {$endif CPU64}
 
+{$ifdef CPUARM} // circumvent FPC issue on ARM
+function ToByte(value: cardinal): cardinal; inline;
+begin
+  result := value and $ff;
+end;
+{$else}
+type ToByte = byte;
+{$endif}
+
 {$ifdef CPUINTEL} // use optimized x86/x64 asm versions for xxHash32
 
 {$ifdef CPUX86}
@@ -1415,7 +1424,7 @@ begin
     repeat
       if PtrUInt(buf) and 3=0 then // align to 4 bytes boundary
         break;
-      result := crc32ctab[0,ToByte(result xor ord(buf^))] xor (result shr 8);
+      result := crc32ctab[0,ToByte(result xor cardinal(buf^))] xor (result shr 8);
       dec(len);
       inc(buf);
     until len=0;
@@ -1429,7 +1438,7 @@ begin
       dec(len,4);
     end;
     while len>0 do begin
-      result := crc32ctab[0,ToByte(result xor ord(buf^))] xor (result shr 8);
+      result := crc32ctab[0,ToByte(result xor cardinal(buf^))] xor (result shr 8);
       dec(len);
       inc(buf);
     end;
@@ -1531,15 +1540,6 @@ asm
         not     eax
 end;
 {$endif PUREPASCAL}
-
-{$ifdef CPUARM} // circumvent FPC issue on ARM
-function ToByte(value: cardinal): cardinal; inline;
-begin
-  result := value and $ff;
-end;
-{$else}
-type ToByte = byte;
-{$endif}
 
 procedure InitializeCrc32ctab;
 var
