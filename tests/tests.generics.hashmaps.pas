@@ -1,3 +1,24 @@
+{
+    This file is part of the Free Pascal run time library.
+    Copyright (c) 2018 by Maciej Izak (hnb),
+    member of the Free Pascal development team
+
+    It contains tests for the Free Pascal generics library
+
+    See the file COPYING.FPC, included in this distribution,
+    for details about the copyright.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    Acknowledgment
+
+    Thanks to Sphere 10 Software (http://sphere10.com) for sponsoring
+    many new types, tests and major refactoring of entire library
+
+ **********************************************************************}
+
 unit tests.generics.hashmaps;
 
 {$mode delphi}
@@ -30,6 +51,8 @@ type
     procedure Test_CountAsKey_CuckooD6;
 
     procedure Test_QuadraticProbing_InfinityLoop;
+
+    procedure Test_TryAddOrSetOrGetValue;
   end;
 
 implementation
@@ -187,6 +210,41 @@ begin
   LMap.Free;
 end;
 
+procedure TTestHashMaps.Test_TryAddOrSetOrGetValue;
+// modified test from Castle Game Engine (https://castle-engine.sourceforge.io)
+var
+  LObjects: TDictionary<string, TObject>;
+  LObject, LFoundObject: TObject;
+begin
+  LObjects := TDictionary<string, TObject>.Create;
+  try
+    LObjects.TryGetValue('blah', LFoundObject);
+    AssertTrue(nil = LFoundObject);
+
+    LObject := TObject.Create;
+    LObjects.AddOrSetValue('nope', LObject);
+
+    LObjects.TryGetValue('blah', LFoundObject);
+    AssertTrue(nil = LFoundObject);
+
+    LObject := TObject.Create;
+    LObjects.AddOrSetValue('blah', LObject);
+
+    LObjects.TryGetValue('blah', LFoundObject);
+    AssertTrue(LObject = LFoundObject);
+
+    LObjects.Remove('blah');
+
+    LObject.Free;
+
+    LObjects.TryGetValue('blah', LFoundObject);
+    AssertTrue(nil = LFoundObject);
+
+    LObjects['nope'].Free;
+  finally
+    FreeAndNil(LObjects)
+  end;
+end;
 
 begin
   RegisterTest(TTestHashMaps);

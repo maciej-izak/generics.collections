@@ -8,7 +8,8 @@ uses
   consoletestrunner,
   tests.generics.hashmaps,
   tests.generics.arrayhelper,
-  tests.generics.trees;
+  tests.generics.trees,
+  tests.generics.stdcollections;
 
 var
   Application: TTestRunner;
