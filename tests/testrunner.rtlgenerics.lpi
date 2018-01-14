@@ -8,10 +8,11 @@
         <MainUnitHasCreateFormStatements Value="False"/>
         <MainUnitHasTitleStatement Value="False"/>
         <MainUnitHasScaledStatement Value="False"/>
+        <UseDefaultCompilerOptions Value="True"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
       <MainUnit Value="0"/>
-      <Title Value="t1"/>
+      <Title Value="testrunner.rtlgenerics"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
     </General>
@@ -27,11 +28,12 @@
     <RunParams>
       <local>
         <FormatVersion Value="1"/>
+        <CommandLineParams Value="-a --format=plain"/>
       </local>
     </RunParams>
     <Units Count="1">
       <Unit0>
-        <Filename Value="t1.lpr"/>
+        <Filename Value="testrunner.rtlgenerics.pp"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
     </Units>
@@ -40,13 +42,19 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="t1"/>
+      <Filename Value="testrunner.rtlgenerics.rtlgenerics"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir);..\src\inc"/>
+      <IncludeFiles Value="..\src\inc;$(ProjOutDir)"/>
       <OtherUnitFiles Value="..\src"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <Other>
+      <CustomOptions Value="-dWAIT_FOR_ENTER"/>
+      <OtherDefines Count="1">
+        <Define0 Value="WAIT_FOR_ENTER"/>
+      </OtherDefines>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions Count="3">
