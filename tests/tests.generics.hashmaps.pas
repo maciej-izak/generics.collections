@@ -11,9 +11,9 @@ uses
 type
   PCollectionNotification = ^TCollectionNotification;
 
-  { TTestDictionaries }
+  { TTestHashMaps }
 
-  TTestDictionaries= class(TTestCase)
+  TTestHashMaps= class(TTestCase)
   private
     procedure CountAsKey_Check(const AWhat: string; AValue, AExpectedValue: Integer;
       AAction: PCollectionNotification);
@@ -32,9 +32,9 @@ type
 
 implementation
 
-{ TTestDictionaries }
+{ TTestHashMaps }
 
-procedure TTestDictionaries.CountAsKey_Check(const AWhat: string; AValue, AExpectedValue: Integer;
+procedure TTestHashMaps.CountAsKey_Check(const AWhat: string; AValue, AExpectedValue: Integer;
     AAction: PCollectionNotification);
 var
   LCollectionNotificationStr: string;
@@ -45,7 +45,7 @@ begin
   AssertEquals(AWhat + LCollectionNotificationStr, AExpectedValue, AValue);
 end;
 
-procedure TTestDictionaries.CountAsKey_Notify(const AKind: string; ASender: TObject; constref
+procedure TTestHashMaps.CountAsKey_Notify(const AKind: string; ASender: TObject; constref
   AItem: Integer; AAction: TCollectionNotification);
 var
   LCount: Integer;
@@ -61,19 +61,19 @@ begin
   end;
 end;
 
-procedure TTestDictionaries.CountAsKey_NotifyValue(ASender: TObject; constref AItem: Integer;
+procedure TTestHashMaps.CountAsKey_NotifyValue(ASender: TObject; constref AItem: Integer;
   AAction: TCollectionNotification);
 begin
   CountAsKey_Notify('Value', ASender, AItem, AAction);
 end;
 
-procedure TTestDictionaries.CountAsKey_NotifyKey(ASender: TObject; constref AItem: Integer;
+procedure TTestHashMaps.CountAsKey_NotifyKey(ASender: TObject; constref AItem: Integer;
   AAction: TCollectionNotification);
 begin
   CountAsKey_Notify('Key', ASender, AItem, AAction);
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_OpenAddressingLP;
+procedure TTestHashMaps.Test_CountAsKey_OpenAddressingLP;
 var
   LDictionary: TOpenAddressingLP<Integer, Integer>;
 begin
@@ -87,7 +87,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_OpenAddressingLPT;
+procedure TTestHashMaps.Test_CountAsKey_OpenAddressingLPT;
 var
   LDictionary: TOpenAddressingLPT<Integer, Integer>;
 begin
@@ -101,7 +101,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_OpenAddressingQP;
+procedure TTestHashMaps.Test_CountAsKey_OpenAddressingQP;
 var
   LDictionary: TOpenAddressingQP<Integer, Integer>;
 begin
@@ -115,7 +115,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_OpenAddressingDH;
+procedure TTestHashMaps.Test_CountAsKey_OpenAddressingDH;
 var
   LDictionary: TOpenAddressingDH<Integer, Integer>;
 begin
@@ -129,7 +129,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_CuckooD2;
+procedure TTestHashMaps.Test_CountAsKey_CuckooD2;
 var
   LDictionary: TCuckooD2<Integer, Integer>;
 begin
@@ -143,7 +143,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_CuckooD4;
+procedure TTestHashMaps.Test_CountAsKey_CuckooD4;
 var
   LDictionary: TCuckooD4<Integer, Integer>;
 begin
@@ -157,7 +157,7 @@ begin
   LDictionary.Free;
 end;
 
-procedure TTestDictionaries.Test_CountAsKey_CuckooD6;
+procedure TTestHashMaps.Test_CountAsKey_CuckooD6;
 var
   LDictionary: TCuckooD6<Integer, Integer>;
 begin
@@ -172,6 +172,6 @@ begin
 end;
 
 begin
-  RegisterTest(TTestDictionaries);
+  RegisterTest(TTestHashMaps);
 end.
 
