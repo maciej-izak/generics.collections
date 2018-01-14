@@ -32,7 +32,7 @@ type
 
 implementation
 
-  { TFoo }
+{ TTestDictionaries }
 
 procedure TTestDictionaries.CountAsKey_Check(const AWhat: string; AValue, AExpectedValue: Integer;
     AAction: PCollectionNotification);
@@ -171,7 +171,7 @@ begin
   LDictionary.Free;
 end;
 
-initialization
+begin
   RegisterTest(TTestDictionaries);
 end.
 

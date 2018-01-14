@@ -6,7 +6,7 @@ program testrunner.rtlgenerics;
 
 uses
   consoletestrunner,
-  tests.generics.dictionaries;
+  tests.generics.dictionaries, tests.generics.arrayhelper;
 
 var
   Application: TTestRunner;
