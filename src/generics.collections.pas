@@ -155,33 +155,33 @@ type
     function ToArray: TArray<T>; virtual; overload;
   end;
 
+  // error: no memory left for TCustomPointersEnumerator<PT> version
   TCustomPointersEnumerator<T, PT> = class abstract(TEnumerator<PT>);
 
-  TCustomPointersCollection<T, PT> = record
-  private
-    FEnumerable: TEnumerable<T>;
+  TCustomPointersCollection<T, PT> = object
+  strict private type
+    TLocalEnumerable = TEnumerable<T>; // compiler has bug for directly usage of TEnumerable<T>
+  protected
+    function Enumerable: TLocalEnumerable; inline;
   public
     function GetEnumerator: TEnumerator<PT>;
   end;
 
   TEnumerableWithPointers<T> = class(TEnumerable<T>)
-  public type
+  strict private type
     TPointersCollection = TCustomPointersCollection<T, PT>;
-  protected
-    FPtr: TPointersCollection;
-
-    procedure InitializeEnumerable; virtual;
+    PPointersCollection = ^TPointersCollection;
+  private
+    function GetPtr: PPointersCollection; inline;
   public
-    constructor Create; virtual;
-    property Ptr: TPointersCollection read FPtr;
+    property Ptr: PPointersCollection read GetPtr;
   end;
-
 
   // More info: http://stackoverflow.com/questions/5232198/about-vectors-growth
   // TODO: custom memory managers (as constraints)
   {$DEFINE CUSTOM_LIST_CAPACITY_INC := Result + Result div 2} // ~approximation to golden ratio: n = n * 1.5 }
   // {$DEFINE CUSTOM_LIST_CAPACITY_INC := Result * 2} // standard inc
-  TCustomList<T> = class abstract(TEnumerable<T>)
+  TCustomList<T> = class abstract(TEnumerableWithPointers<T>)
   public type
     PT = ^T;
   protected
@@ -225,44 +225,19 @@ type
     constructor Create(AList: TCustomList<T>);
   end;
 
-  TCustomListPointersEnumerator<T, PT> = class abstract(TEnumerator<PT>)
-  private type
-    TList = TCustomList<T>; // lazarus bug workaround
-  private var
-    FList: TList.PItems;
-    FIndex: SizeInt;
-  protected
-    function DoMoveNext: boolean; override;
-    function DoGetCurrent: PT; override;
-    function GetCurrent: PT; virtual;
-  public
-    constructor Create(AList: TList.PItems);
-  end;
-
-  TCustomListPointersCollection<TPointersEnumerator, T, PT> = record
-  private type
-    TList = TCustomList<T>; // lazarus bug workaround
-  private
-    function List: TList.PItems; inline;
-    function GetCount: SizeInt; inline;
-    function GetItem(AIndex: SizeInt): PT;
-  public
-    function GetEnumerator: TPointersEnumerator;
-    function ToArray: TArray<PT>;
-    property Count: SizeInt read GetCount;
-    property Items[Index: SizeInt]: PT read GetItem; default;
-  end;
-
   TCustomListWithPointers<T> = class(TCustomList<T>)
-  private type
-    TPointersEnumerator = class(TCustomListPointersEnumerator<T, PT>);
-    TPointersCollection = TCustomListPointersCollection<TPointersEnumerator, T, PT>;
   public type
-    PPointersCollection = ^TPointersCollection;
-  private
-    function GetPointers: PPointersCollection; inline;
-  public
-    property Ptr: PPointersCollection read GetPointers;
+    TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
+    protected
+      FList: TCustomListWithPointers<T>;
+      FIndex: SizeInt;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: PT; override;
+    public
+      constructor Create(AList: TCustomListWithPointers<T>);
+    end;
+  protected
+    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
   end;
 
   TList<T> = class(TCustomListWithPointers<T>)
@@ -380,43 +355,19 @@ type
     property Duplicates: TDuplicates read FDuplicates write FDuplicates;
   end;
 
-  TQueuePointersEnumerator<T, PT> = class abstract(TEnumerator<PT>)
-  private type
-    TList = TCustomList<T>; // lazarus bug workaround
-  private var
-    FList: TList.PItems;
-    FIndex: SizeInt;
-  protected
-    function DoMoveNext: boolean; override;
-    function DoGetCurrent: PT; override;
-    function GetCurrent: PT; virtual;
-  public
-    constructor Create(AList: TList.PItems; ALow: SizeInt);
-  end;
-
-  TQueuePointersCollection<TPointersEnumerator, T, PT> = record
-  private type
-    TList = TCustomList<T>; // lazarus bug workaround
-  private
-    function List: TList.PItems; inline;
-    function GetLow: SizeInt; inline;
-    function GetCount: SizeInt; inline;
-    function GetItem(AIndex: SizeInt): PT;
-  public
-    function GetEnumerator: TPointersEnumerator;
-    function ToArray: TArray<PT>;
-    property Count: SizeInt read GetCount;
-    property Items[Index: SizeInt]: PT read GetItem; default;
-  end;
-
   TQueue<T> = class(TCustomList<T>)
-  private type
-    TPointersEnumerator = class(TQueuePointersEnumerator<T, PT>);
-    TPointersCollection = TQueuePointersCollection<TPointersEnumerator, T, PT>;
   public type
-    PPointersCollection = ^TPointersCollection;
-  private
-    function GetPointers: PPointersCollection; inline;
+    TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
+    protected
+      FQueue: TQueue<T>;
+      FIndex: SizeInt;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: PT; override;
+    public
+      constructor Create(AQueue: TQueue<T>);
+    end;
+  protected
+    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
   protected
     // bug #24287 - workaround for generics type name conflict (Identifier not found)
     // next bug workaround - for another error related to previous workaround
@@ -445,7 +396,6 @@ type
     function Peek: T;
     procedure Clear;
     procedure TrimExcess;
-    property Ptr: PPointersCollection read GetPointers;
   end;
 
   TStack<T> = class(TCustomListWithPointers<T>)
@@ -533,6 +483,7 @@ type
     function DoGetEnumerator: TEnumerator<T>; override;
     function GetCount: SizeInt; virtual; abstract;
   public
+    constructor Create; virtual; abstract; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
     function GetEnumerator: TCustomHashSetEnumerator; reintroduce; virtual; abstract;
 
@@ -820,7 +771,6 @@ type
     FInternalDictionary: TOpenAddressingLP<PT, TEmptyRecord>;
     FInternalTree: TAVLTree<T>;
     function DoGetEnumerator: TEnumerator<T>; override;
-    procedure InitializeEnumerable; override;
     function GetCount: SizeInt; override;
   protected type
     TSortedHashSetEqualityComparer = class(TInterfacedObject, IEqualityComparer<PT>)
@@ -1105,21 +1055,21 @@ end;
 
 { TCustomPointersCollection<T, PT> }
 
+function TCustomPointersCollection<T, PT>.Enumerable: TLocalEnumerable;
+begin
+  Result := TLocalEnumerable(@Self);
+end;
+
 function TCustomPointersCollection<T, PT>.GetEnumerator: TEnumerator<PT>;
 begin
-  Result := FEnumerable.GetPtrEnumerator;
+  Result := Enumerable.GetPtrEnumerator;
 end;
 
 { TEnumerableWithPointers<T> }
 
-procedure TEnumerableWithPointers<T>.InitializeEnumerable;
+function TEnumerableWithPointers<T>.GetPtr: PPointersCollection;
 begin
-  FPtr.FEnumerable := Self;
-end;
-
-constructor TEnumerableWithPointers<T>.Create;
-begin
-  InitializeEnumerable;
+  Result := PPointersCollection(Self);
 end;
 
 { TCustomList<T> }
@@ -1226,83 +1176,31 @@ begin
   FList := AList;
 end;
 
-{ TCustomListPointersEnumerator<T, PT> }
+{ TCustomListWithPointers<T>.TPointersEnumerator }
 
-function TCustomListPointersEnumerator<T, PT>.DoMoveNext: boolean;
+function TCustomListWithPointers<T>.TPointersEnumerator.DoMoveNext: boolean;
 begin
   Inc(FIndex);
-  Result := (FList.FLength <> 0) and (FIndex < FList.FLength)
+  Result := (FList.FItems.FLength <> 0) and (FIndex < FList.FItems.FLength)
 end;
 
-function TCustomListPointersEnumerator<T, PT>.DoGetCurrent: PT;
+function TCustomListWithPointers<T>.TPointersEnumerator.DoGetCurrent: PT;
 begin
-  Result := GetCurrent;
+  Result := @FList.FItems.FItems[FIndex];;
 end;
 
-function TCustomListPointersEnumerator<T, PT>.GetCurrent: PT;
-begin
-  Result := @FList.FItems[FIndex];
-end;
-
-constructor TCustomListPointersEnumerator<T, PT>.Create(AList: TCustomList<T>.PItems);
+constructor TCustomListWithPointers<T>.TPointersEnumerator.Create(AList: TCustomListWithPointers<T>);
 begin
   inherited Create;
   FIndex := -1;
   FList := AList;
 end;
 
-{ TCustomListPointersCollection<TPointersEnumerator, T, PT> }
-
-function TCustomListPointersCollection<TPointersEnumerator, T, PT>.List: TCustomList<T>.PItems;
-begin
-  Result := @(TCustomList<T>.TItems(Pointer(@Self)^));
-end;
-
-function TCustomListPointersCollection<TPointersEnumerator, T, PT>.GetCount: SizeInt;
-begin
-  Result := List.FLength;
-end;
-
-function TCustomListPointersCollection<TPointersEnumerator, T, PT>.GetItem(AIndex: SizeInt): PT;
-begin
-  Result := @List.FItems[AIndex];
-end;
-
-function TCustomListPointersCollection<TPointersEnumerator, T, PT>.{Do}GetEnumerator: TPointersEnumerator;
-begin
-  Result := TPointersEnumerator(TPointersEnumerator.NewInstance);
-  TCustomListPointersEnumerator<T, PT>(Result).Create(List);
-end;
-
-function TCustomListPointersCollection<TPointersEnumerator, T, PT>.ToArray: TArray<PT>;
-{begin
-  Result := ToArrayImpl(FList.Count);
-end;}
-var
-  i: SizeInt;
-  LEnumerator: TPointersEnumerator;
-begin
-  SetLength(Result, Count);
-
-  try
-    LEnumerator := GetEnumerator;
-
-    i := 0;
-    while LEnumerator.MoveNext do
-    begin
-      Result[i] := LEnumerator.Current;
-      Inc(i);
-    end;
-  finally
-    LEnumerator.Free;
-  end;
-end;
-
 { TCustomListWithPointers<T> }
 
-function TCustomListWithPointers<T>.GetPointers: PPointersCollection;
+function TCustomListWithPointers<T>.GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>;
 begin
-  Result := PPointersCollection(@FItems);
+  Result := TPointersEnumerator.Create(Self);
 end;
 
 { TList<T> }
@@ -1870,81 +1768,24 @@ begin
 {$endif}
 end;
 
-{ TQueuePointersEnumerator<T, PT> }
+{ TQueue<T>.TPointersEnumerator }
 
-function TQueuePointersEnumerator<T, PT>.DoMoveNext: boolean;
+function TQueue<T>.TPointersEnumerator.DoMoveNext: boolean;
 begin
   Inc(FIndex);
-  Result := (FList.FLength <> 0) and (FIndex < FList.FLength)
+  Result := (FQueue.FItems.FLength <> 0) and (FIndex < FQueue.FItems.FLength)
 end;
 
-function TQueuePointersEnumerator<T, PT>.DoGetCurrent: PT;
+function TQueue<T>.TPointersEnumerator.DoGetCurrent: PT;
 begin
-  Result := GetCurrent;
+  Result := @FQueue.FItems.FItems[FIndex];
 end;
 
-function TQueuePointersEnumerator<T, PT>.GetCurrent: PT;
-begin
-  Result := @FList.FItems[FIndex];
-end;
-
-constructor TQueuePointersEnumerator<T, PT>.Create(AList: TList.PItems; ALow: SizeInt);
+constructor TQueue<T>.TPointersEnumerator.Create(AQueue: TQueue<T>);
 begin
   inherited Create;
-  FIndex := Pred(ALow);
-  FList := AList;
-end;
-
-{ TQueuePointersCollection<TPointersEnumerator, T, PT> }
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.List: TList.PItems;
-begin
-  Result := @(TCustomList<T>.TItems(Pointer(@Self)^));
-end;
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetLow: SizeInt;
-begin
-  Result := PSizeInt(PByte(@((@Self)^))+SizeOf(TCustomList<T>.TItems))^;
-end;
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetCount: SizeInt;
-begin
-  Result := List.FLength;
-end;
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetItem(AIndex: SizeInt): PT;
-begin
-  Result := @List.FItems[AIndex + GetLow];
-end;
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.GetEnumerator: TPointersEnumerator;
-begin
-  Result := TPointersEnumerator(TPointersEnumerator.NewInstance);
-  TPointersEnumerator(Result).Create(List, GetLow);
-end;
-
-function TQueuePointersCollection<TPointersEnumerator, T, PT>.ToArray: TArray<PT>;
-{begin
-  Result := ToArrayImpl(FList.Count);
-end;}
-var
-  i: SizeInt;
-  LEnumerator: TPointersEnumerator;
-begin
-  SetLength(Result, Count);
-
-  try
-    LEnumerator := GetEnumerator;
-
-    i := 0;
-    while LEnumerator.MoveNext do
-    begin
-      Result[i] := LEnumerator.Current;
-      Inc(i);
-    end;
-  finally
-    LEnumerator.Free;
-  end;
+  FIndex := Pred(AQueue.FLow);
+  FQueue := AQueue;
 end;
 
 { TQueue<T>.TEnumerator }
@@ -1958,9 +1799,9 @@ end;
 
 { TQueue<T> }
 
-function TQueue<T>.GetPointers: PPointersCollection;
+function TQueue<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
 begin
-  Result := PPointersCollection(@FItems);
+  Result := TPointersenumerator.Create(Self);
 end;
 
 function TQueue<T>.GetEnumerator: TEnumerator;
@@ -2271,7 +2112,7 @@ procedure TCustomHashSet<T>.UnionWith(AHashSet: TCustomHashSet<T>);
 var
   i: PT;
 begin
-  for i in AHashSet.Ptr do
+  for i in AHashSet.Ptr^ do
     Add(i^);
 end;
 
@@ -2282,7 +2123,7 @@ var
 begin
   LList := TList<PT>.Create;
 
-  for i in Ptr do
+  for i in Ptr^ do
     if not AHashSet.Contains(i^) then
       LList.Add(i);
 
@@ -2296,7 +2137,7 @@ procedure TCustomHashSet<T>.ExceptWith(AHashSet: TCustomHashSet<T>);
 var
   i: PT;
 begin
-  for i in AHashSet.Ptr do
+  for i in AHashSet.Ptr^ do
     Remove(i^);
 end;
 
@@ -2307,7 +2148,7 @@ var
 begin
   LList := TList<PT>.Create;
 
-  for i in AHashSet.Ptr do
+  for i in AHashSet.Ptr^ do
     if Contains(i^) then
       LList.Add(i)
     else
@@ -2367,13 +2208,11 @@ end;
 
 constructor THashSet<T>.Create;
 begin
-  inherited;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create;
 end;
 
 constructor THashSet<T>.Create(const AComparer: IEqualityComparer<T>);
 begin
-  inherited Create;
   FInternalDictionary := TOpenAddressingLP<T, TEmptyRecord>.Create(AComparer);
 end;
 
@@ -3536,11 +3375,6 @@ begin
   Result := GetEnumerator;
 end;
 
-procedure TSortedHashSet<T>.InitializeEnumerable;
-begin
-  inherited;
-end;
-
 function TSortedHashSet<T>.GetCount: SizeInt;
 begin
   Result := FInternalDictionary.Count;
@@ -3589,7 +3423,6 @@ end;
 
 constructor TSortedHashSet<T>.Create;
 begin
-  inherited;
   FInternalTree := TAVLTree<T>.Create;
   FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(TEqualityComparer<T>.Default));
 end;
@@ -3601,14 +3434,12 @@ end;
 
 constructor TSortedHashSet<T>.Create(const AComparer: IComparer<T>);
 begin
-  inherited Create;
   FInternalTree := TAVLTree<T>.Create(AComparer);
   FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(AComparer));
 end;
 
 constructor TSortedHashSet<T>.Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>);
 begin
-  inherited Create;
   FInternalTree := TAVLTree<T>.Create(AComparer);
   FInternalDictionary := TOpenAddressingLP<PT, TEmptyRecord>.Create(TSortedHashSetEqualityComparer.Create(AComparer,AEqualityComparer));
 end;
