@@ -515,7 +515,7 @@ type
 
     TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
     protected
-      FEnumerator: TDictionary<T, TEmptyRecord>.TPKeyEnumerator;
+      FEnumerator: TEnumerator<PT>;
       function DoMoveNext: boolean; override;
       function DoGetCurrent: PT; override;
     public

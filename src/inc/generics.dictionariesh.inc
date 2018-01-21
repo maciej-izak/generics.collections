@@ -120,30 +120,17 @@ type
   { TDictionaryEnumerable }
 
   TDictionaryEnumerable<TDictionaryEnumerator: TObject; TDictionaryPointersEnumerator, // ... inherits from TCustomDictionaryEnumerator. workaround...
-    T, PT, CUSTOM_DICTIONARY_CONSTRAINTS> = class abstract(TEnumerable<T>)
-  private type
-    TPointersCollection = record
-    private
-      function Dictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>; inline;
-      function GetCount: SizeInt; inline;
-    public
-      function GetEnumerator: TDictionaryPointersEnumerator;
-      function ToArray: TArray<PT>;
-      property Count: SizeInt read GetCount;
-    end;
-  public type
-    PPointersCollection = ^TPointersCollection;
+    T, CUSTOM_DICTIONARY_CONSTRAINTS> = class abstract(TEnumerableWithPointers<T>)
   private
-    FPointers: TPointersCollection;
     FDictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>;
     function GetCount: SizeInt;
-    function GetPointers: PPointersCollection; inline;
+  protected
+    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; override;
   public
     constructor Create(ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);
     function DoGetEnumerator: TDictionaryEnumerator; override;
     function ToArray: TArray<T>; override; final;
     property Count: SizeInt read GetCount;
-    property Ptr: PPointersCollection read GetPointers;
   end;
 
   // more info : http://en.wikipedia.org/wiki/Open_addressing
@@ -233,9 +220,9 @@ type
       end;
 
       // Collections
-      TValueCollection = class(TDictionaryEnumerable<TValueEnumerator, TPValueEnumerator, TValue, PValue, CUSTOM_DICTIONARY_CONSTRAINTS>);
+      TValueCollection = class(TDictionaryEnumerable<TValueEnumerator, TPValueEnumerator, TValue, CUSTOM_DICTIONARY_CONSTRAINTS>);
 
-      TKeyCollection = class(TDictionaryEnumerable<TKeyEnumerator, TPKeyEnumerator, TKey, PKey, CUSTOM_DICTIONARY_CONSTRAINTS>);
+      TKeyCollection = class(TDictionaryEnumerable<TKeyEnumerator, TPKeyEnumerator, TKey, CUSTOM_DICTIONARY_CONSTRAINTS>);
 
     // bug #24283 - workaround related to lack of DoGetEnumerator
     function GetEnumerator: TPairEnumerator; reintroduce;
@@ -500,9 +487,9 @@ type
       end;
 
       // Collections
-      TValueCollection = class(TDictionaryEnumerable<TValueEnumerator, TPValueEnumerator, TValue, PValue, CUSTOM_DICTIONARY_CONSTRAINTS>);
+      TValueCollection = class(TDictionaryEnumerable<TValueEnumerator, TPValueEnumerator, TValue, CUSTOM_DICTIONARY_CONSTRAINTS>);
 
-      TKeyCollection = class(TDictionaryEnumerable<TKeyEnumerator, TPKeyEnumerator, TKey, PKey, CUSTOM_DICTIONARY_CONSTRAINTS>);
+      TKeyCollection = class(TDictionaryEnumerable<TKeyEnumerator, TPKeyEnumerator, TKey, CUSTOM_DICTIONARY_CONSTRAINTS>);
 
     // bug #24283 - workaround related to lack of DoGetEnumerator
     function GetEnumerator: TPairEnumerator; reintroduce;

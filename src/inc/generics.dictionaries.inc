@@ -153,71 +153,31 @@ end;
 
 { TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS> }
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
-  TPointersCollection.Dictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>;
-begin
-  Result := TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>(Pointer(@Self)^);
-end;
-
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
-  TPointersCollection.{Do}GetEnumerator: TDictionaryPointersEnumerator;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>;
 begin
   Result := TDictionaryPointersEnumerator(TDictionaryPointersEnumerator.NewInstance);
-  TCustomDictionaryEnumerator<PT, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(Dictionary);
+  TCustomDictionaryEnumerator<PT, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(FDictionary);
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
-  TPointersCollection.GetCount: SizeInt;
-begin
-  Result := Dictionary.Count;
-end;
-
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
-  TPointersCollection.ToArray: TArray<PT>;
-var
-  i: SizeInt;
-  LEnumerator: TDictionaryPointersEnumerator;
-begin
-  SetLength(Result, Count);
-
-  try
-    LEnumerator := GetEnumerator;
-
-    i := 0;
-    while LEnumerator.MoveNext do
-    begin
-      Result[i] := LEnumerator.Current;
-      Inc(i);
-    end;
-  finally
-    LEnumerator.Free;
-  end;
-end;
-
-constructor TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.Create(
+constructor TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.Create(
   ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);
 begin
   FDictionary := ADictionary;
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.
   DoGetEnumerator: TDictionaryEnumerator;
 begin
   Result := TDictionaryEnumerator(TDictionaryEnumerator.NewInstance);
   TCustomDictionaryEnumerator<T, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(FDictionary);
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.GetCount: SizeInt;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetCount: SizeInt;
 begin
   Result := TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>(FDictionary).Count;
 end;
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPointers: PPointersCollection;
-begin
-  Result := @FPointers;
-end;
-
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, PT, CUSTOM_DICTIONARY_CONSTRAINTS>.ToArray: TArray<T>;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.ToArray: TArray<T>;
 begin
   Result := ToArrayImpl(FDictionary.Count);
 end;
