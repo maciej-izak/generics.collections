@@ -816,7 +816,7 @@ type
   end;
 
   TSortedHashSet<T> = class(TCustomHashSet<T>)
-  public//protected
+  protected
     FInternalDictionary: TOpenAddressingLP<PT, TEmptyRecord>;
     FInternalTree: TAVLTree<T>;
     function DoGetEnumerator: TEnumerator<T>; override;
