@@ -145,7 +145,7 @@ type
   public type
     PT = ^T;
   protected // no forward generics declarations (needed by TPointersCollection<T, PT>), this should be moved into TEnumerableWithPointers
-    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; virtual; abstract;
+    function GetPtrEnumerator: TEnumerator<PT>; virtual; abstract;
   protected
     function ToArrayImpl(ACount: SizeInt): TArray<T>; overload; // used by descendants
   protected
@@ -237,7 +237,7 @@ type
       constructor Create(AList: TCustomListWithPointers<T>);
     end;
   protected
-    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
   end;
 
   TList<T> = class(TCustomListWithPointers<T>)
@@ -367,7 +367,7 @@ type
       constructor Create(AQueue: TQueue<T>);
     end;
   protected
-    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
   protected
     // bug #24287 - workaround for generics type name conflict (Identifier not found)
     // next bug workaround - for another error related to previous workaround
@@ -522,7 +522,7 @@ type
       constructor Create(AHashSet: THashSet<T>);
     end;
   protected
-    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
     function GetCount: SizeInt; override;
   public
     constructor Create; override; overload;
@@ -583,7 +583,7 @@ type
     FTree: TTree;
     function GetCount: SizeInt; inline;
   protected
-    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
     function DoGetEnumerator: TTreeEnumerator; override;
   public
     constructor Create(ATree: TTree);
@@ -783,7 +783,7 @@ type
       constructor Create(ASortedSet: TSortedSet<T>);
     end;
   protected
-    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
     function GetCount: SizeInt; override;
   public
     constructor Create; override; overload;
@@ -833,7 +833,7 @@ type
       constructor Create(ASortedHashSet: TSortedHashSet<T>);
     end;
   protected
-    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
   public
     constructor Create; override; overload;
     constructor Create(const AComparer: IEqualityComparer<T>); overload;
@@ -1229,7 +1229,7 @@ end;
 
 { TCustomListWithPointers<T> }
 
-function TCustomListWithPointers<T>.GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>;
+function TCustomListWithPointers<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
 end;
@@ -1830,7 +1830,7 @@ end;
 
 { TQueue<T> }
 
-function TQueue<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+function TQueue<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersenumerator.Create(Self);
 end;
@@ -2222,7 +2222,7 @@ end;
 
 { THashSet<T> }
 
-function THashSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+function THashSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
 end;
@@ -2386,7 +2386,7 @@ begin
   Result := FTree.Count;
 end;
 
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>;
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TTreePointersEnumerator.Create(FTree);
 end;
@@ -3353,7 +3353,7 @@ end;
 
 { TSortedSet<T> }
 
-function TSortedSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+function TSortedSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
 end;
@@ -3473,7 +3473,7 @@ end;
 
 { TSortedHashSet<T> }
 
-function TSortedHashSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+function TSortedHashSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
 end;

@@ -125,7 +125,7 @@ type
     FDictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>;
     function GetCount: SizeInt;
   protected
-    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; override;
+    function GetPtrEnumerator: TEnumerator<PT>; override;
     function DoGetEnumerator: TDictionaryEnumerator; override;
   public
     constructor Create(ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);

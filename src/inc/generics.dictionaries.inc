@@ -153,7 +153,7 @@ end;
 
 { TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS> }
 
-function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>;
+function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TDictionaryPointersEnumerator.Create(FDictionary);
 end;
