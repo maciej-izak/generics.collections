@@ -155,8 +155,7 @@ end;
 
 function TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>;
 begin
-  Result := TDictionaryPointersEnumerator(TDictionaryPointersEnumerator.NewInstance);
-  TCustomDictionaryEnumerator<PT, CUSTOM_DICTIONARY_CONSTRAINTS>(Result).Create(FDictionary);
+  Result := TDictionaryPointersEnumerator.Create(FDictionary);
 end;
 
 constructor TDictionaryEnumerable<TDictionaryEnumerator, TDictionaryPointersEnumerator, T, CUSTOM_DICTIONARY_CONSTRAINTS>.Create(

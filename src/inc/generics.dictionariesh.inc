@@ -126,9 +126,9 @@ type
     function GetCount: SizeInt;
   protected
     function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; override;
+    function DoGetEnumerator: TDictionaryEnumerator; override;
   public
     constructor Create(ADictionary: TCustomDictionary<CUSTOM_DICTIONARY_CONSTRAINTS>);
-    function DoGetEnumerator: TDictionaryEnumerator; override;
     function ToArray: TArray<T>; override; final;
     property Count: SizeInt read GetCount;
   end;
