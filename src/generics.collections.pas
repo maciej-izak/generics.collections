@@ -716,6 +716,8 @@ type
     property Count: SizeInt read FCount;
     property Root: PNode read FRoot;
     function Find(constref AKey: TKey): PNode;
+    function ContainsKey(constref AKey: TKey; out ANode: PNode): boolean; overload; inline;
+    function ContainsKey(constref AKey: TKey): boolean; overload; inline;
 
     procedure ConsistencyCheck; virtual;
     procedure WriteTreeNode(AStream: TStream; ANode: PNode);
@@ -757,13 +759,52 @@ type
   end;
 
   TAVLTree<T> = class(TAVLTreeMap<T, TEmptyRecord>)
+  public type
+    TItemEnumerator = TKeyEnumerator;
   public
     function Add(constref AValue: T): PNode; reintroduce;
   end;
 
   TIndexedAVLTree<T> = class(TIndexedAVLTreeMap<T, TEmptyRecord>)
+  public type
+    TItemEnumerator = TKeyEnumerator;
   public
     function Add(constref AValue: T): PNode; reintroduce;
+  end;
+
+  TSortedSet<T> = class(TCustomSet<T>)
+  protected
+    FInternalTree: TAVLTree<T>;
+  public type
+    TSortedSetEnumerator = class(TCustomSetEnumerator)
+    protected type
+      TTreeEnumerator = TAVLTree<T>.TItemEnumerator;
+      function GetCurrent: T; override;
+    public
+      constructor Create(ASet: TCustomSet<T>); override;
+    end;
+
+    TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
+    protected
+      FEnumerator: TEnumerator<PT>;
+      function DoMoveNext: boolean; override;
+      function DoGetCurrent: PT; override;
+    public
+      constructor Create(ASortedSet: TSortedSet<T>);
+    end;
+  protected
+    function GetPtrEnumerator(AIndex: Integer=0): TEnumerator<PT>; override;
+    function GetCount: SizeInt; override;
+  public
+    constructor Create; override; overload;
+    constructor Create(const AComparer: IComparer<T>); virtual; overload;
+    destructor Destroy; override;
+    function GetEnumerator: TCustomSetEnumerator; override;
+
+    function Add(constref AValue: T): Boolean; override;
+    function Remove(constref AValue: T): Boolean; override;
+    procedure Clear; override;
+    function Contains(constref AValue: T): Boolean; override;
   end;
 
   TSortedHashSet<T> = class(TCustomSet<T>)
@@ -787,7 +828,7 @@ type
   public type
     TSortedHashSetEnumerator = class(TCustomSetEnumerator)
     protected type
-      TTreeEnumerator = TAVLTree<T>.TKeyEnumerator;
+      TTreeEnumerator = TAVLTree<T>.TItemEnumerator;
       function GetCurrent: T; override;
     public
       constructor Create(ASet: TCustomSet<T>); override;
@@ -3007,6 +3048,17 @@ begin
   end;
 end;
 
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.ContainsKey(constref AKey: TKey; out ANode: PNode): boolean;
+begin
+  ANode := Find(AKey);
+  Result := Assigned(ANode);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.ContainsKey(constref AKey: TKey): boolean; overload; inline;
+begin
+  Result := Assigned(Find(AKey));
+end;
+
 procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.ConsistencyCheck;
 var
   RealCount: SizeInt;
@@ -3300,6 +3352,94 @@ end;
 function TIndexedAVLTree<T>.Add(constref AValue: T): PNode;
 begin
   Result := inherited Add(AValue, EmptyRecord);
+end;
+
+{ TSortedSet<T>.TSortedSetEnumerator }
+
+function TSortedSet<T>.TSortedSetEnumerator.GetCurrent: T;
+begin
+  Result := TTreeEnumerator(FEnumerator).GetCurrent;
+end;
+
+constructor TSortedSet<T>.TSortedSetEnumerator.Create(ASet: TCustomSet<T>);
+begin
+  TTreeEnumerator(FEnumerator) := TSortedSet<T>(ASet).FInternalTree.Keys.DoGetEnumerator;
+end;
+
+{ TSortedSet<T>.TPointersEnumerator }
+
+function TSortedSet<T>.TPointersEnumerator.DoMoveNext: boolean;
+begin
+  Result := FEnumerator.MoveNext;
+end;
+
+function TSortedSet<T>.TPointersEnumerator.DoGetCurrent: PT;
+begin
+  Result := FEnumerator.Current;
+end;
+
+constructor TSortedSet<T>.TPointersEnumerator.Create(ASortedSet: TSortedSet<T>);
+begin
+  FEnumerator := ASortedSet.FInternalTree.Keys.Ptr^.GetEnumerator;
+end;
+
+{ TSortedSet<T> }
+
+function TSortedSet<T>.GetPtrEnumerator(AIndex: Integer): TEnumerator<PT>;
+begin
+  Result := TPointersEnumerator.Create(Self);
+end;
+
+function TSortedSet<T>.GetCount: SizeInt;
+begin
+  Result := FInternalTree.Count;
+end;
+
+function TSortedSet<T>.GetEnumerator: TCustomSetEnumerator;
+begin
+  Result := TSortedSetEnumerator.Create(Self);
+end;
+
+constructor TSortedSet<T>.Create;
+begin
+  FInternalTree := TAVLTree<T>.Create;
+end;
+
+constructor TSortedSet<T>.Create(const AComparer: IComparer<T>);
+begin
+  FInternalTree := TAVLTree<T>.Create(AComparer);
+end;
+
+destructor TSortedSet<T>.Destroy;
+begin
+  FInternalTree.Free;
+end;
+
+function TSortedSet<T>.Add(constref AValue: T): Boolean;
+begin
+  Result := not FInternalTree.ContainsKey(AValue);
+  if Result then
+    FInternalTree.Add(AValue);
+end;
+
+function TSortedSet<T>.Remove(constref AValue: T): Boolean;
+var
+  LNode: TAVLTree<T>.PNode;
+begin
+  LNode := FInternalTree.Find(AValue);
+  Result := Assigned(LNode);
+  if Result then
+    FInternalTree.Delete(LNode);
+end;
+
+procedure TSortedSet<T>.Clear;
+begin
+  FInternalTree.Clear;
+end;
+
+function TSortedSet<T>.Contains(constref AValue: T): Boolean;
+begin
+  Result := FInternalTree.ContainsKey(AValue);
 end;
 
 { TSortedHashSet<T>.TSortedHashSetEqualityComparer }
