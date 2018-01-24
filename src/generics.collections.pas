@@ -578,29 +578,17 @@ type
   end;
 
   TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator,
-    T, PT, PNode, TTree> = class abstract(TEnumerable<T>)
-  private type
-    PPointersCollection = ^TPointersCollection;
-    TPointersCollection = record
-    private
-      function Tree: TTree; inline;
-      function GetCount: SizeInt; inline;
-    public
-      function GetEnumerator: TTreePointersEnumerator;
-      function ToArray: TArray<PT>;
-      property Count: SizeInt read GetCount;
-    end;
+    T, PT, PNode, TTree> = class abstract(TEnumerableWithPointers<T>)
   private
-    FPointers: TPointersCollection;
     FTree: TTree;
-    function GetCount: SizeInt;
-    function GetPointers: PPointersCollection; inline;
+    function GetCount: SizeInt; inline;
+  protected
+    function GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>; override;
+    function DoGetEnumerator: TTreeEnumerator; override;
   public
     constructor Create(ATree: TTree);
-    function DoGetEnumerator: TTreeEnumerator; override;
     function ToArray: TArray<T>; override; final;
     property Count: SizeInt read GetCount;
-    property Ptr: PPointersCollection read GetPointers;
   end;
 
   TAVLTreeEnumerator<T, PNode, TTree> = class(TCustomTreeEnumerator<T, PNode, TTree>)
@@ -838,7 +826,7 @@ type
 
     TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
     protected
-      FEnumerator: TAVLTree<T>.TPKeyEnumerator;
+      FEnumerator: TEnumerator<PT>;
       function DoMoveNext: boolean; override;
       function DoGetCurrent: PT; override;
     public
@@ -2391,49 +2379,6 @@ begin
   TObject(FTree) := ATree;
 end;
 
-{ TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, TREE_CONSTRAINTS>.TPointersCollection }
-
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
-  TPointersCollection.Tree: TTree;
-begin
-  Result := TTree(Pointer(@Self)^);
-end;
-
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
-  TPointersCollection.GetCount: SizeInt;
-begin
-  Result := Tree.Count;
-end;
-
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
-  TPointersCollection.{Do}GetEnumerator: TTreePointersEnumerator;
-begin
-  Result := TTreePointersEnumerator(TTreePointersEnumerator.NewInstance);
-  TTreePointersEnumerator(Result).Create(Tree);
-end;
-
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
-  TPointersCollection.ToArray: TArray<PT>;
-var
-  i: SizeInt;
-  LEnumerator: TTreePointersEnumerator;
-begin
-  SetLength(Result, Count);
-
-  try
-    LEnumerator := GetEnumerator;
-
-    i := 0;
-    while LEnumerator.MoveNext do
-    begin
-      Result[i] := LEnumerator.Current;
-      Inc(i);
-    end;
-  finally
-    LEnumerator.Free;
-  end;
-end;
-
 { TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, TREE_CONSTRAINTS> }
 
 function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetCount: SizeInt;
@@ -2441,9 +2386,9 @@ begin
   Result := FTree.Count;
 end;
 
-function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPointers: PPointersCollection;
+function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.GetPtrEnumerator(AIndex: Integer = 0): TEnumerator<PT>;
 begin
-  Result := @FTree;
+  Result := TTreePointersEnumerator.Create(FTree);
 end;
 
 constructor TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.Create(
@@ -2455,8 +2400,7 @@ end;
 function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.
   DoGetEnumerator: TTreeEnumerator;
 begin
-  Result := TTreeEnumerator(TTreeEnumerator.NewInstance);
-  TTreeEnumerator(Result).Create(FTree);
+  Result := TTreeEnumerator.Create(FTree);
 end;
 
 function TTreeEnumerable<TTreeEnumerator, TTreePointersEnumerator, T, PT, PNode, TTree>.ToArray: TArray<T>;
