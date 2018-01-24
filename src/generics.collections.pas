@@ -465,18 +465,18 @@ type
 
   { TCustomHashSet<T> }
 
-  TCustomHashSet<T> = class(TEnumerableWithPointers<T>)
+  TCustomSet<T> = class(TEnumerableWithPointers<T>)
   public type
     PT = ^T;
   protected type
-    TCustomHashSetEnumerator = class(TEnumerator<T>)
+    TCustomSetEnumerator = class(TEnumerator<T>)
     protected var
       FEnumerator: TEnumerator<T>;
       function DoMoveNext: boolean; override;
       function DoGetCurrent: T; override;
       function GetCurrent: T; virtual; abstract;
     public
-      constructor Create(ASet: TCustomHashSet<T>); virtual; abstract;
+      constructor Create(ASet: TCustomSet<T>); virtual; abstract;
       destructor Destroy; override;
     end;
   protected
@@ -485,32 +485,32 @@ type
   public
     constructor Create; virtual; abstract; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
-    function GetEnumerator: TCustomHashSetEnumerator; reintroduce; virtual; abstract;
+    function GetEnumerator: TCustomSetEnumerator; reintroduce; virtual; abstract;
 
     function Add(constref AValue: T): Boolean; virtual; abstract;
     function Remove(constref AValue: T): Boolean; virtual; abstract;
     procedure Clear; virtual; abstract;
     function Contains(constref AValue: T): Boolean; virtual; abstract;
-    procedure UnionWith(AHashSet: TCustomHashSet<T>);
-    procedure IntersectWith(AHashSet: TCustomHashSet<T>);
-    procedure ExceptWith(AHashSet: TCustomHashSet<T>);
-    procedure SymmetricExceptWith(AHashSet: TCustomHashSet<T>);
+    procedure UnionWith(AHashSet: TCustomSet<T>);
+    procedure IntersectWith(AHashSet: TCustomSet<T>);
+    procedure ExceptWith(AHashSet: TCustomSet<T>);
+    procedure SymmetricExceptWith(AHashSet: TCustomSet<T>);
 
     property Count: SizeInt read GetCount;
   end;
 
   { THashSet<T> }
 
-  THashSet<T> = class(TCustomHashSet<T>)
+  THashSet<T> = class(TCustomSet<T>)
   protected
     FInternalDictionary: TOpenAddressingLP<T, TEmptyRecord>;
   public type
-    THashSetEnumerator = class(TCustomHashSetEnumerator)
+    THashSetEnumerator = class(TCustomSetEnumerator)
     protected type
       TDictionaryEnumerator = TDictionary<T, TEmptyRecord>.TKeyEnumerator;
       function GetCurrent: T; override;
     public
-      constructor Create(ASet: TCustomHashSet<T>); override;
+      constructor Create(ASet: TCustomSet<T>); override;
     end;
 
     TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
@@ -528,7 +528,7 @@ type
     constructor Create; override; overload;
     constructor Create(const AComparer: IEqualityComparer<T>); virtual; overload;
     destructor Destroy; override;
-    function GetEnumerator: TCustomHashSetEnumerator; override;
+    function GetEnumerator: TCustomSetEnumerator; override;
 
     function Add(constref AValue: T): Boolean; override;
     function Remove(constref AValue: T): Boolean; override;
@@ -766,7 +766,7 @@ type
     function Add(constref AValue: T): PNode; reintroduce;
   end;
 
-  TSortedHashSet<T> = class(TCustomHashSet<T>)
+  TSortedHashSet<T> = class(TCustomSet<T>)
   protected
     FInternalDictionary: TOpenAddressingLP<PT, TEmptyRecord>;
     FInternalTree: TAVLTree<T>;
@@ -785,12 +785,12 @@ type
       constructor Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>); overload;
     end;
   public type
-    TSortedHashSetEnumerator = class(TCustomHashSetEnumerator)
+    TSortedHashSetEnumerator = class(TCustomSetEnumerator)
     protected type
       TTreeEnumerator = TAVLTree<T>.TKeyEnumerator;
       function GetCurrent: T; override;
     public
-      constructor Create(ASet: TCustomHashSet<T>); override;
+      constructor Create(ASet: TCustomSet<T>); override;
     end;
 
     TPointersEnumerator = class(TCustomPointersEnumerator<T, PT>)
@@ -809,7 +809,7 @@ type
     constructor Create(const AComparer: IComparer<T>); overload;
     constructor Create(const AComparer: IComparer<T>; const AEqualityComparer: IEqualityComparer<T>); overload;
     destructor Destroy; override;
-    function GetEnumerator: TCustomHashSetEnumerator; override;
+    function GetEnumerator: TCustomSetEnumerator; override;
 
     function Add(constref AValue: T): Boolean; override;
     function Remove(constref AValue: T): Boolean; override;
@@ -2075,31 +2075,31 @@ end;
 
 {$I inc\generics.dictionaries.inc}
 
-{ TCustomHashSet<T>.TCustomHashSetEnumerator }
+{ TCustomSet<T>.TCustomSetEnumerator }
 
-function TCustomHashSet<T>.TCustomHashSetEnumerator.DoMoveNext: boolean;
+function TCustomSet<T>.TCustomSetEnumerator.DoMoveNext: boolean;
 begin
   Result := FEnumerator.DoMoveNext;
 end;
 
-function TCustomHashSet<T>.TCustomHashSetEnumerator.DoGetCurrent: T;
+function TCustomSet<T>.TCustomSetEnumerator.DoGetCurrent: T;
 begin
   Result := FEnumerator.DoGetCurrent;
 end;
 
-destructor TCustomHashSet<T>.TCustomHashSetEnumerator.Destroy;
+destructor TCustomSet<T>.TCustomSetEnumerator.Destroy;
 begin
   FEnumerator.Free;
 end;
 
-{ TCustomHashSet<T> }
+{ TCustomSet<T> }
 
-function TCustomHashSet<T>.DoGetEnumerator: Generics.Collections.TEnumerator<T>;
+function TCustomSet<T>.DoGetEnumerator: Generics.Collections.TEnumerator<T>;
 begin
   Result := GetEnumerator;
 end;
 
-constructor TCustomHashSet<T>.Create(ACollection: TEnumerable<T>);
+constructor TCustomSet<T>.Create(ACollection: TEnumerable<T>);
 var
   i: T;
 begin
@@ -2108,7 +2108,7 @@ begin
     Add(i);
 end;
 
-procedure TCustomHashSet<T>.UnionWith(AHashSet: TCustomHashSet<T>);
+procedure TCustomSet<T>.UnionWith(AHashSet: TCustomSet<T>);
 var
   i: PT;
 begin
@@ -2116,7 +2116,7 @@ begin
     Add(i^);
 end;
 
-procedure TCustomHashSet<T>.IntersectWith(AHashSet: TCustomHashSet<T>);
+procedure TCustomSet<T>.IntersectWith(AHashSet: TCustomSet<T>);
 var
   LList: TList<PT>;
   i: PT;
@@ -2133,7 +2133,7 @@ begin
   LList.Free;
 end;
 
-procedure TCustomHashSet<T>.ExceptWith(AHashSet: TCustomHashSet<T>);
+procedure TCustomSet<T>.ExceptWith(AHashSet: TCustomSet<T>);
 var
   i: PT;
 begin
@@ -2141,7 +2141,7 @@ begin
     Remove(i^);
 end;
 
-procedure TCustomHashSet<T>.SymmetricExceptWith(AHashSet: TCustomHashSet<T>);
+procedure TCustomSet<T>.SymmetricExceptWith(AHashSet: TCustomSet<T>);
 var
   LList: TList<PT>;
   i: PT;
@@ -2167,7 +2167,7 @@ begin
   Result := TDictionaryEnumerator(FEnumerator).GetCurrent;
 end;
 
-constructor THashSet<T>.THashSetEnumerator.Create(ASet: TCustomHashSet<T>);
+constructor THashSet<T>.THashSetEnumerator.Create(ASet: TCustomSet<T>);
 begin
   TDictionaryEnumerator(FEnumerator) := THashSet<T>(ASet).FInternalDictionary.Keys.DoGetEnumerator;
 end;
@@ -2201,7 +2201,7 @@ begin
   Result := FInternalDictionary.Count;
 end;
 
-function THashSet<T>.GetEnumerator: TCustomHashSetEnumerator;
+function THashSet<T>.GetEnumerator: TCustomSetEnumerator;
 begin
   Result := THashSetEnumerator.Create(Self);
 end;
@@ -3341,7 +3341,7 @@ begin
   Result := TTreeEnumerator(FEnumerator).Current;
 end;
 
-constructor TSortedHashSet<T>.TSortedHashSetEnumerator.Create(ASet: TCustomHashSet<T>);
+constructor TSortedHashSet<T>.TSortedHashSetEnumerator.Create(ASet: TCustomSet<T>);
 begin
   FEnumerator := TSortedHashSet<T>(ASet).FInternalTree.Keys.GetEnumerator;
 end;
@@ -3380,7 +3380,7 @@ begin
   Result := FInternalDictionary.Count;
 end;
 
-function TSortedHashSet<T>.GetEnumerator: TCustomHashSetEnumerator;
+function TSortedHashSet<T>.GetEnumerator: TCustomSetEnumerator;
 begin
   Result := TSortedHashSetEnumerator.Create(Self);
 end;
