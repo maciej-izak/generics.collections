@@ -626,6 +626,7 @@ type
     // type exist only for generic constraint in TNodeCollection (non functional - PPNode has no sense)
     TPNodeEnumerator = class(TAVLTreeEnumerator<PPNode, PNode, TTree>);
   private var
+    FDuplicates: TDuplicates;
     FComparer: IComparer<TKey>;
   protected
     FCount: SizeInt;
@@ -727,6 +728,7 @@ type
 
     property Keys: TKeyCollection read GetKeys;
     property Values: TValueCollection read GetValues;
+    property Duplicates: TDuplicates read FDuplicates write FDuplicates;
   end;
 
   TAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, TEmptyRecord>)
@@ -2892,6 +2894,7 @@ end;
 function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref AKey: TKey; constref AValue: TValue): PNode;
 var
   LParent, LNode: PNode;
+  LCompare: Integer;
 begin
   Inc(FCount);
   Result := AddNode;
@@ -2909,7 +2912,9 @@ begin
   // insert new node
 
   while true do
-    if Compare(Result.Key,LParent.Key)<0 then
+  begin
+    LCompare := Compare(Result.Key,LParent.Key);
+    if LCompare<0 then
     begin
       if LParent.Left = nil then
       begin
@@ -2926,6 +2931,25 @@ begin
         Break;
       end;
       LParent := LParent.Right;
+    end;
+  end;
+
+  if LCompare=0 then
+    case FDuplicates of
+      dupAccept: ;
+      dupIgnore:
+        begin
+          LParent.Right := nil;
+          DeleteNode(Result, true);
+          Exit(LParent);
+        end;
+      dupError:
+        begin
+          LParent.Right := nil;
+          DeleteNode(Result, true);
+          Result := nil;
+          raise EListError.Create(SCollectionDuplicate);
+        end;
     end;
 
   Result.Parent := LParent;
