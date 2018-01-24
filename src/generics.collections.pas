@@ -267,17 +267,20 @@ type
     constructor Create; overload;
     constructor Create(const AComparer: IComparer<T>); overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>); overload;
     destructor Destroy; override;
 
     function Add(constref AValue: T): SizeInt; virtual;
     procedure AddRange(constref AValues: array of T); virtual; overload;
     procedure AddRange(const AEnumerable: IEnumerable<T>); overload;
     procedure AddRange(AEnumerable: TEnumerable<T>); overload;
+    procedure AddRange(AEnumerable: TEnumerableWithPointers<T>); overload;
 
     procedure Insert(AIndex: SizeInt; constref AValue: T); virtual;
     procedure InsertRange(AIndex: SizeInt; constref AValues: array of T); virtual; overload;
     procedure InsertRange(AIndex: SizeInt; const AEnumerable: IEnumerable<T>); overload;
     procedure InsertRange(AIndex: SizeInt; const AEnumerable: TEnumerable<T>); overload;
+    procedure InsertRange(AIndex: SizeInt; const AEnumerable: TEnumerableWithPointers<T>); overload;
 
     function Remove(constref AValue: T): SizeInt;
     procedure Delete(AIndex: SizeInt); inline;
@@ -389,6 +392,7 @@ type
     function GetCount: SizeInt; override;
   public
     constructor Create(ACollection: TEnumerable<T>); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>); overload;
     destructor Destroy; override;
     procedure Enqueue(constref AValue: T);
     function Dequeue: T;
@@ -414,6 +418,7 @@ type
     procedure SetCapacity(AValue: SizeInt); override;
   public
     constructor Create(ACollection: TEnumerable<T>); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>); overload;
     destructor Destroy; override;
     procedure Clear;
     procedure Push(constref AValue: T);
@@ -432,6 +437,7 @@ type
     constructor Create(AOwnsObjects: Boolean = True); overload;
     constructor Create(const AComparer: IComparer<T>; AOwnsObjects: Boolean = True); overload;
     constructor Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean = True); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean = True); overload;
     property OwnsObjects: Boolean read FObjectsOwner write FObjectsOwner;
   end;
 
@@ -443,6 +449,7 @@ type
   public
     constructor Create(AOwnsObjects: Boolean = True); overload;
     constructor Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean = True); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean = True); overload;
     procedure Dequeue;
     property OwnsObjects: Boolean read FObjectsOwner write FObjectsOwner;
   end;
@@ -455,6 +462,7 @@ type
   public
     constructor Create(AOwnsObjects: Boolean = True); overload;
     constructor Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean = True); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean = True); overload;
     function Pop: T;
     property OwnsObjects: Boolean read FObjectsOwner write FObjectsOwner;
   end;
@@ -485,6 +493,7 @@ type
   public
     constructor Create; virtual; abstract; overload;
     constructor Create(ACollection: TEnumerable<T>); overload;
+    constructor Create(ACollection: TEnumerableWithPointers<T>); overload;
     function GetEnumerator: TCustomSetEnumerator; reintroduce; virtual; abstract;
 
     function Add(constref AValue: T): Boolean; virtual; abstract;
@@ -1261,6 +1270,15 @@ begin
     Add(LItem);
 end;
 
+constructor TList<T>.Create(ACollection: TEnumerableWithPointers<T>);
+var
+  LItem: PT;
+begin
+  Create;
+  for LItem in ACollection.Ptr^ do
+    Add(LItem^);
+end;
+
 destructor TList<T>.Destroy;
 begin
   SetCapacity(0);
@@ -1342,6 +1360,14 @@ begin
     Add(LValue);
 end;
 
+procedure TList<T>.AddRange(AEnumerable: TEnumerableWithPointers<T>);
+var
+  LValue: PT;
+begin
+  for LValue in AEnumerable.Ptr^ do
+    Add(LValue^);
+end;
+
 procedure TList<T>.InternalInsert(AIndex: SizeInt; constref AValue: T);
 begin
   if AIndex <> PrepareAddingItem then
@@ -1418,6 +1444,22 @@ begin
   for LValue in AEnumerable do
   begin
     InternalInsert(Aindex + i, LValue);
+    Inc(i);
+  end;
+end;
+
+procedure TList<T>.InsertRange(AIndex: SizeInt; const AEnumerable: TEnumerableWithPointers<T>);
+var
+  LValue: PT;
+  i:  SizeInt;
+begin
+  if (AIndex < 0) or (AIndex > Count) then
+    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+
+  i := 0;
+  for LValue in AEnumerable.Ptr^ do
+  begin
+    InternalInsert(Aindex + i, LValue^);
     Inc(i);
   end;
 end;
@@ -1890,6 +1932,14 @@ begin
     Enqueue(LItem);
 end;
 
+constructor TQueue<T>.Create(ACollection: TEnumerableWithPointers<T>);
+var
+  LItem: PT;
+begin
+  for LItem in ACollection.Ptr^ do
+    Enqueue(LItem^);
+end;
+
 destructor TQueue<T>.Destroy;
 begin
   Clear;
@@ -1953,6 +2003,14 @@ var
 begin
   for LItem in ACollection do
     Push(LItem);
+end;
+
+constructor TStack<T>.Create(ACollection: TEnumerableWithPointers<T>);
+var
+  LItem: PT;
+begin
+  for LItem in ACollection.Ptr^ do
+    Push(LItem^);
 end;
 
 function TStack<T>.DoRemove(AIndex: SizeInt; ACollectionNotification: TCollectionNotification): T;
@@ -2048,6 +2106,13 @@ begin
   FObjectsOwner := AOwnsObjects;
 end;
 
+constructor TObjectList<T>.Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean);
+begin
+  inherited Create(ACollection);
+
+  FObjectsOwner := AOwnsObjects;
+end;
+
 { TObjectQueue<T> }
 
 procedure TObjectQueue<T>.Notify(constref AValue: T; ACollectionNotification: TCollectionNotification);
@@ -2065,6 +2130,13 @@ begin
 end;
 
 constructor TObjectQueue<T>.Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean);
+begin
+  inherited Create(ACollection);
+
+  FObjectsOwner := AOwnsObjects;
+end;
+
+constructor TObjectQueue<T>.Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean);
 begin
   inherited Create(ACollection);
 
@@ -2093,6 +2165,13 @@ begin
 end;
 
 constructor TObjectStack<T>.Create(ACollection: TEnumerable<T>; AOwnsObjects: Boolean);
+begin
+  inherited Create(ACollection);
+
+  FObjectsOwner := AOwnsObjects;
+end;
+
+constructor TObjectStack<T>.Create(ACollection: TEnumerableWithPointers<T>; AOwnsObjects: Boolean);
 begin
   inherited Create(ACollection);
 
@@ -2137,6 +2216,15 @@ begin
   Create;
   for i in ACollection do
     Add(i);
+end;
+
+constructor TCustomSet<T>.Create(ACollection: TEnumerableWithPointers<T>);
+var
+  i: PT;
+begin
+  Create;
+  for i in ACollection.Ptr^ do
+    Add(i^);
 end;
 
 procedure TCustomSet<T>.UnionWith(AHashSet: TCustomSet<T>);
