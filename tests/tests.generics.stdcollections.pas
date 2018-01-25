@@ -50,6 +50,7 @@ type
 
     // My (c) tests
     procedure Test_SortedList;
+    procedure Test_Queue;
   end;
 
 implementation
@@ -463,6 +464,43 @@ begin
     AssertEquals(Format('Wrong item (%d) index (%d) in TSortedList',[LSortedList[i], i]), i, LSortedList[i]);
 
   LSortedList.Free;
+end;
+
+procedure TTestStdCollections.Test_Queue;
+const
+  NUMBERS: array[0..2] of Integer = (3,4,5);
+var
+  LQueue: TQueue<Integer>;
+  i: Integer;
+  j: Integer;
+  pi: Pinteger;
+begin
+  LQueue := TQueue<Integer>.Create;
+
+  for i := 1 to 5 do
+  begin
+    LQueue.Enqueue(i);
+    AssertEquals(LQueue.Peek, 1);
+  end;
+
+  AssertEquals(LQueue.Dequeue, 1);
+  AssertEquals(LQueue.Extract, 2);
+
+  j := 0;
+  for i in LQueue do
+  begin
+    AssertEquals(i, NUMBERS[j]);
+    Inc(j);
+  end;
+
+  j := 0;
+  for pi in LQueue.Ptr^ do
+  begin
+    AssertEquals(pi^, NUMBERS[j]);
+    Inc(j);
+  end;
+
+  LQueue.Free;
 end;
 
 begin
