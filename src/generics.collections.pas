@@ -500,6 +500,10 @@ type
     function Remove(constref AValue: T): Boolean; virtual; abstract;
     procedure Clear; virtual; abstract;
     function Contains(constref AValue: T): Boolean; virtual; abstract;
+    function AddRange(constref AValues: array of T): Boolean; overload;
+    function AddRange(const AEnumerable: IEnumerable<T>): Boolean; overload;
+    function AddRange(AEnumerable: TEnumerable<T>): Boolean; overload;
+    function AddRange(AEnumerable: TEnumerableWithPointers<T>): Boolean; overload;
     procedure UnionWith(AHashSet: TCustomSet<T>);
     procedure IntersectWith(AHashSet: TCustomSet<T>);
     procedure ExceptWith(AHashSet: TCustomSet<T>);
@@ -2226,6 +2230,42 @@ begin
   Create;
   for i in ACollection.Ptr^ do
     Add(i^);
+end;
+
+function TCustomSet<T>.AddRange(constref AValues: array of T): Boolean;
+var
+  i: T;
+begin
+  Result := True;
+  for i in AValues do
+    Result := Add(i) and Result;
+end;
+
+function TCustomSet<T>.AddRange(const AEnumerable: IEnumerable<T>): Boolean;
+var
+  i: T;
+begin
+  Result := True;
+  for i in AEnumerable do
+    Result := Add(i) and Result;
+end;
+
+function TCustomSet<T>.AddRange(AEnumerable: TEnumerable<T>): Boolean;
+var
+  i: T;
+begin
+  Result := True;
+  for i in AEnumerable do
+    Result := Add(i) and Result;
+end;
+
+function TCustomSet<T>.AddRange(AEnumerable: TEnumerableWithPointers<T>): Boolean;
+var
+  i: PT;
+begin
+  Result := True;
+  for i in AEnumerable.Ptr^ do
+    Result := Add(i^) and Result;
 end;
 
 procedure TCustomSet<T>.UnionWith(AHashSet: TCustomSet<T>);
