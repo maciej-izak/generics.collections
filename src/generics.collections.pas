@@ -640,7 +640,7 @@ type
 
     function Compare(constref ALeft, ARight: TKey): Integer; inline;
     function FindPredecessor(ANode: PNode): PNode;
-
+    function FindInsertNode(ANode: PNode; out AInsertNode: PNode): Integer;
 
     procedure RotateRightRight(ANode: PNode); virtual;
     procedure RotateLeftLeft(ANode: PNode); virtual;
@@ -691,6 +691,7 @@ type
   private
     FNodes: TNodeCollection;
     function GetNodeCollection: TNodeCollection;
+    procedure InternalAdd(ANode, AParent: PNode);
     procedure InternalDelete(ANode: PNode);
     function GetKeys: TKeyCollection;
     function GetValues: TValueCollection;
@@ -2604,6 +2605,46 @@ begin
   Result := ANode;
 end;
 
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.FindInsertNode(ANode: PNode; out AInsertNode: PNode): Integer;
+begin
+  AInsertNode := FRoot;
+  if AInsertNode = nil then // first item in tree
+    Exit(0);
+
+  repeat
+    Result := Compare(ANode.Key,AInsertNode.Key);
+    if Result < 0 then
+    begin
+      if AInsertNode.Left = nil then
+        Exit;
+      AInsertNode := AInsertNode.Left;
+    end
+    else
+    begin
+      if AInsertNode.Right = nil then
+        Exit;
+      AInsertNode := AInsertNode.Right;
+      if Result = 0 then
+        Break;
+    end;
+  until false;
+
+  // for equal items (when item already exist) we need to keep 0 result
+  while true do
+    if Compare(ANode.Key,AInsertNode.Key) < 0 then
+    begin
+      if AInsertNode.Left = nil then
+        Exit;
+      AInsertNode := AInsertNode.Left;
+    end
+    else
+    begin
+      if AInsertNode.Right = nil then
+        Exit;
+      AInsertNode := AInsertNode.Right;
+    end;
+end;
+
 procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.RotateRightRight(ANode: PNode);
 var
   LNode, LParent: PNode;
@@ -2782,6 +2823,68 @@ begin
   Result := FNodes;
 end;
 
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.InternalAdd(ANode, AParent: PNode);
+begin
+  Inc(FCount);
+
+  ANode.Parent := AParent;
+  NodeAdded(ANode);
+
+  if AParent=nil then
+  begin
+    FRoot := ANode;
+    Exit;
+  end;
+
+  // balance after insert
+
+  if AParent.Balance<>0 then
+    AParent.Balance := 0
+  else
+  begin
+    if AParent.Left = ANode then
+      AParent.Balance := 1
+    else
+      AParent.Balance := -1;
+
+    ANode := AParent.Parent;
+
+    while ANode <> nil do
+    begin
+      if ANode.Balance<>0 then
+      begin
+        if ANode.Balance = 1 then
+        begin
+          if ANode.Right = AParent then
+            ANode.Balance := 0
+          else if AParent.Balance = -1 then
+            RotateLeftRight(ANode)
+          else
+            RotateLeftLeft(ANode);
+        end
+        else
+        begin
+          if ANode.Left = AParent then
+            ANode.Balance := 0
+          else if AParent^.Balance = 1 then
+            RotateRightLeft(ANode)
+          else
+            RotateRightRight(ANode);
+        end;
+        Break;
+      end;
+
+      if ANode.Left = AParent then
+        ANode.Balance := 1
+      else
+        ANode.Balance := -1;
+
+      AParent := ANode;
+      ANode := ANode.Parent;
+    end;
+  end;
+end;
+
 procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.InternalDelete(ANode: PNode);
 var
   t, y, z: PNode;
@@ -2925,116 +3028,37 @@ end;
 
 function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref AKey: TKey; constref AValue: TValue): PNode;
 var
-  LParent, LNode: PNode;
-  LCompare: Integer;
+  LParent: PNode;
 begin
-  Inc(FCount);
   Result := AddNode;
   Result.Data.Key := AKey;
   Result.Data.Value := AValue;
 
-  LParent := FRoot;
-  if LParent = nil then // first item in tree
-  begin
-    FRoot := Result;
-    NodeAdded(Result);
-    Exit;
-  end;
-
   // insert new node
-
-  while true do
-  begin
-    LCompare := Compare(Result.Key,LParent.Key);
-    if LCompare<0 then
-    begin
-      if LParent.Left = nil then
-      begin
-        LParent.Left := Result;
-        Break;
-      end;
-      LParent := LParent.Left;
-    end
-    else
-    begin
-      if LParent.Right = nil then
-      begin
-        LParent.Right := Result;
-        Break;
-      end;
-      LParent := LParent.Right;
-    end;
+  case FindInsertNode(Result, LParent) of
+    -1: LParent.Left := Result;
+    0:
+      if Assigned(LParent) then
+        case FDuplicates of
+          dupAccept: LParent.Right := Result;
+          dupIgnore:
+            begin
+              LParent.Right := nil;
+              DeleteNode(Result, true);
+              Exit(LParent);
+            end;
+          dupError:
+            begin
+              LParent.Right := nil;
+              DeleteNode(Result, true);
+              Result := nil;
+              raise EListError.Create(SCollectionDuplicate);
+            end;
+        end;
+    1: LParent.Right := Result;
   end;
 
-  if LCompare=0 then
-    case FDuplicates of
-      dupAccept: ;
-      dupIgnore:
-        begin
-          LParent.Right := nil;
-          DeleteNode(Result, true);
-          Exit(LParent);
-        end;
-      dupError:
-        begin
-          LParent.Right := nil;
-          DeleteNode(Result, true);
-          Result := nil;
-          raise EListError.Create(SCollectionDuplicate);
-        end;
-    end;
-
-  Result.Parent := LParent;
-
-  NodeAdded(Result);
-
-  // balance after insert
-
-  if LParent.Balance<>0 then
-    LParent.Balance := 0
-  else
-  begin
-    if LParent.Left = Result then
-      LParent.Balance := 1
-    else
-      LParent.Balance := -1;
-
-    LNode := LParent.Parent;
-
-    while LNode <> nil do
-    begin
-      if LNode.Balance<>0 then
-      begin
-        if LNode.Balance = 1 then
-        begin
-          if LNode.Right = LParent then
-            LNode.Balance := 0
-          else if LParent.Balance = -1 then
-            RotateLeftRight(LNode)
-          else
-            RotateLeftLeft(LNode);
-        end
-        else
-        begin
-          if LNode.Left = LParent then
-            LNode.Balance := 0
-          else if LParent^.Balance = 1 then
-            RotateRightLeft(LNode)
-          else
-            RotateRightRight(LNode);
-        end;
-        Break;
-      end;
-
-      if LNode.Left = LParent then
-        LNode.Balance := 1
-      else
-        LNode.Balance := -1;
-
-      LParent := LNode;
-      LNode := LNode.Parent;
-    end;
-  end;
+  InternalAdd(Result, LParent);
 end;
 
 function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Remove(constref AKey: TKey): boolean;
@@ -3472,10 +3496,28 @@ begin
 end;
 
 function TSortedSet<T>.Add(constref AValue: T): Boolean;
+var
+  LNodePtr, LParent: TAVLTree<T>.PNode;
+  LNode: TAVLTree<T>.TNode;
+  LCompare: Integer;
 begin
-  Result := not FInternalTree.ContainsKey(AValue);
-  if Result then
-    FInternalTree.Add(AValue);
+  LNode.Data.Key := AValue;
+
+  LCompare := FInternalTree.FindInsertNode(@LNode, LParent);
+
+  Result := not((LCompare=0) and Assigned(LParent));
+  if not Result then
+    Exit;
+
+  LNodePtr := FInternalTree.AddNode;
+  LNodePtr^.Data.Key := AValue;
+
+  case LCompare of
+    -1: LParent.Left := LNodePtr;
+    1: LParent.Right := LNodePtr;
+  end;
+
+  FInternalTree.InternalAdd(LNodePtr, LParent);
 end;
 
 function TSortedSet<T>.Remove(constref AValue: T): Boolean;
