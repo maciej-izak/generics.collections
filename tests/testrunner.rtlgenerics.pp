@@ -9,7 +9,9 @@ uses
   tests.generics.hashmaps,
   tests.generics.arrayhelper,
   tests.generics.trees,
-  tests.generics.stdcollections;
+  tests.generics.stdcollections,
+  tests.generics.sets
+  ;
 
 var
   Application: TTestRunner;
