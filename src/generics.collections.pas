@@ -103,7 +103,7 @@ type
       AIndex, ACount: SizeInt): Boolean; virtual; abstract; overload;
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
       out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
-      AIndex, ACount: SizeInt): Boolean; overload;
+      AIndex, ACount: SizeInt): Boolean; virtual; abstract; overload;
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
       out AFoundIndex: SizeInt; const AComparer: IComparer<T>): Boolean; overload;
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
@@ -121,6 +121,9 @@ type
   public
     class function BinarySearch(constref AValues: array of T; constref AItem: T;
       out ASearchResult: TBinarySearchResult; const AComparer: IComparer<T>;
+      AIndex, ACount: SizeInt): Boolean; override; overload;
+    class function BinarySearch(constref AValues: array of T; constref AItem: T;
+      out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
       AIndex, ACount: SizeInt): Boolean; override; overload;
   end {$ifdef EXTRA_WARNINGS}experimental{$endif}; // will be renamed to TArray (bug #24254)
 
@@ -874,16 +877,6 @@ end;
 
 { TCustomArrayHelper<T> }
 
-
-class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
-  out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
-  AIndex, ACount: SizeInt): Boolean;
-var
-  LSearchResult: TBinarySearchResult;
-begin
-  Result := BinarySearch(AValues, AItem, LSearchResult, AComparer, Low(AValues), Length(AValues));
-end;
-
 class function TCustomArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
   out AFoundIndex: SizeInt; const AComparer: IComparer<T>): Boolean;
 begin
@@ -1035,6 +1028,59 @@ begin
     ASearchResult.CompareResult := 0;
     ASearchResult.FoundIndex := -1;
     ASearchResult.CandidateIndex := -1;
+    Exit(False);
+  end;
+end;
+
+class function TArrayHelper<T>.BinarySearch(constref AValues: array of T; constref AItem: T;
+  out AFoundIndex: SizeInt; const AComparer: IComparer<T>;
+  AIndex, ACount: SizeInt): Boolean;
+var
+  imin, imax, imid: Int32;
+  LCompare: SizeInt;
+begin
+  // continually narrow search until just one element remains
+  imin := AIndex;
+  imax := Pred(AIndex + ACount);
+
+  // http://en.wikipedia.org/wiki/Binary_search_algorithm
+  while (imin < imax) do
+  begin
+        imid := imin + ((imax - imin) shr 1);
+
+        // code must guarantee the interval is reduced at each iteration
+        // assert(imid < imax);
+        // note: 0 <= imin < imax implies imid will always be less than imax
+
+        LCompare := AComparer.Compare(AValues[imid], AItem);
+        // reduce the search
+        if (LCompare < 0) then
+          imin := imid + 1
+        else
+        begin
+          imax := imid;
+          if LCompare = 0 then
+          begin
+            AFoundIndex := imid;
+            Exit(True);
+          end;
+        end;
+  end;
+    // At exit of while:
+    //   if A[] is empty, then imax < imin
+    //   otherwise imax == imin
+
+    // deferred test for equality
+
+  LCompare := AComparer.Compare(AValues[imin], AItem);
+  if (imax = imin) and (LCompare = 0) then
+  begin
+    AFoundIndex := imin;
+    Exit(True);
+  end
+  else
+  begin
+    AFoundIndex := -1;
     Exit(False);
   end;
 end;
