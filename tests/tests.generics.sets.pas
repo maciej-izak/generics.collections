@@ -22,6 +22,7 @@ type
     procedure Test_HashSet_General;
     procedure Test_SortedSet_General;
     procedure Test_SortedHashSet_General;
+    procedure Test_HashSet;
     procedure Test_SortedSet;
     procedure Test_SortedHashSet;
   end;
@@ -32,10 +33,13 @@ type
     class procedure ValidateSet(ASet: T; const ANumbers: array of Integer); static;
     class procedure Test_Set_General; static;
     class procedure Test_Set_Sorted; static;
+    class procedure Test_Set_NonSorted; static;
   end;
 
 var
   GTest: TTestSets;
+
+procedure CheckSet_10(ASet: TCustomSet<Integer>; ASortedList: TSortedList<Integer>);
 
 implementation
 
@@ -149,6 +153,45 @@ begin with GTest do begin
   Numbers.Free;
 end end;
 
+procedure CheckSet_10(ASet: TCustomSet<Integer>; ASortedList: TSortedList<Integer>);
+var
+  i: Integer;
+begin with GTest do begin
+  AssertEquals(ASortedList.Count, 10);
+  for i := 0 to 9 do
+  begin
+    AssertEquals(i, ASortedList[i]);
+    AssertTrue(ASet.Contains(i));
+  end;
+end end;
+
+class procedure TGenericTestSets<T>.Test_Set_NonSorted;
+var
+  Numbers: T;
+  LSortedList: TSortedList<Integer>;
+  i: Integer;
+  pi: PInteger;
+begin with GTest do begin
+  Numbers := T.Create;
+  LSortedList := TSortedList<Integer>.Create;
+  AssertTrue(Numbers.AddRange([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
+  ValidateSet(Numbers, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+  for i in TCustomSet<Integer>(Numbers) do
+    LSortedList.Add(i);
+  CheckSet_10(Numbers, LSortedList);
+
+  LSortedList.Clear;
+
+  for pi in TCustomSet<Integer>(Numbers).Ptr^ do
+    LSortedList.Add(pi^);
+  CheckSet_10(Numbers, LSortedList);
+
+
+  LSortedList.Free;
+  Numbers.Free;
+end end;
+
 { TTestSets }
 
 constructor TTestSets.Create;
@@ -170,6 +213,11 @@ end;
 procedure TTestSets.Test_SortedHashSet_General;
 begin
   TGenericTestSets<TSortedHashSet_Integer>.Test_Set_General;
+end;
+
+procedure TTestSets.Test_HashSet;
+begin
+  TGenericTestSets<THashSet_Integer>.Test_Set_NonSorted;
 end;
 
 procedure TTestSets.Test_SortedSet;
