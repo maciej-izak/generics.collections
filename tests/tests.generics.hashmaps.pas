@@ -50,8 +50,6 @@ type
     procedure Test_CountAsKey_CuckooD4;
     procedure Test_CountAsKey_CuckooD6;
 
-    procedure Test_QuadraticProbing_InfinityLoop;
-
     procedure Test_TryAddOrSetOrGetValue;
   end;
 
@@ -194,20 +192,6 @@ begin
   LDictionary.Add(LDictionary.Count,LDictionary.Count);
   CountAsKey_Check('Item', LDictionary[0], 0, nil);
   LDictionary.Free;
-end;
-
-procedure TTestHashMaps.Test_QuadraticProbing_InfinityLoop;
-// https://github.com/maciej-izak/generics.collections/issues/4
-var
-  LMap: TOpenAddressingQP<string, pointer, TDelphiHashFactory>;
-begin
-  LMap := TOpenAddressingQP<string, pointer, TDelphiHashFactory>.Create();
-  LMap.Add(#178#178#107#141#143#151#168#39#172#38#83#194#130#90#101, nil);
-  LMap.Add(#193#190#172#41#144#231#52#62#45#117#108#45#217#71#77, nil);
-  LMap.Add(#49#116#202#160#38#131#41#37#217#171#227#215#122#151#71, nil);
-  LMap.Add(#148#159#199#71#198#97#69#201#116#45#195#184#178#129#200, nil);
-  CheckEquals(false, LMap.ContainsKey(#$E6'h=fzb'#$E5#$B4#$A0#$C4#$E6'B6r>'));
-  LMap.Free;
 end;
 
 procedure TTestHashMaps.Test_TryAddOrSetOrGetValue;
