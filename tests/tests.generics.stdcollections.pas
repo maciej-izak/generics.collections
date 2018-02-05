@@ -29,14 +29,13 @@ unit tests.generics.stdcollections;
 interface
 
 uses
-  fpcunit, testutils, testregistry,
+  fpcunit, testutils, testregistry, tests.generics.utils,
   Classes, SysUtils, Generics.Collections, Generics.Defaults;
 
 type
-
-  { TTestStdCollections }
-
-  TTestStdCollections = class(TTestCase)
+  TTestStdCollections = class(TTestCollections)
+  private
+    procedure Test_TList_Notification(AList: TList<string>); overload;
   published
     // Tests from Castle Game Engine
     procedure Test_List;
@@ -51,9 +50,41 @@ type
     // My (c) tests
     procedure Test_SortedList;
     procedure Test_Queue;
+    procedure Test_GenericListBox;
+
+    procedure Test_TList_Notification; overload;
+    procedure Test_TSortedList_Notification;
+    procedure Test_TQueue_Notification;
+    procedure Test_TStack_Notification;
+    procedure Test_TObjectList_Notification;
+    procedure Test_TObjectQueue_Notification;
+    procedure Test_TObjectStack_Notification;
+  end;
+
+  TGenericListBox<T> = class
+  private class var
+    F : TList<TComponentClass>;
+    class procedure Test(ATest: TTestCase);
   end;
 
 implementation
+
+class procedure TGenericListBox<T>.Test(ATest: TTestCase);
+begin
+  F := TList<TComponentClass>.Create;
+  F.Add(TDataModule);
+  F.Add(nil);
+  with TList<TComponentClass>.Create(F) do
+  begin
+    ATest.AssertTrue(Count = 2);
+    ATest.AssertTrue(F[0] = Items[0]);
+    ATest.AssertTrue(F[1] = Items[1]);
+    ATest.AssertTrue(F[0] = TDataModule);
+    ATest.AssertTrue(F[1] = nil);
+    Free;
+  end;
+  F.Free;
+end;
 
 type
   TApple = class
@@ -501,6 +532,347 @@ begin
   end;
 
   LQueue.Free;
+end;
+
+procedure TTestStdCollections.Test_TList_Notification(AList: TList<string>);
+var
+  LStringsObj: TEnumerable<string>;
+  LStringsIntf: IEnumerable<string>;
+begin
+  try
+    LStringsObj := EnumerableStringsObj(['Ddd', 'Eee']);
+    LStringsIntf := EnumerableStringsIntf(['Fff', 'Ggg']);
+    AList.OnNotify := NotifyTestStr;
+
+    { Add + AddRange }
+
+    NotificationAdd(AList, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff', 'Ggg'], cnAdded);
+    AList.Add('Aaa');
+    AList.AddRange(['Bbb', 'Ccc']);
+    AList.AddRange(LStringsObj);
+    AList.AddRange(LStringsIntf);
+    AssertNotificationsExecutedStr;
+
+    { Clear }
+
+    NotificationAdd(AList, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff', 'Ggg'], cnRemoved);
+    AList.Clear;
+    AssertNotificationsExecutedStr;
+
+    { Insert + InsertRange }
+
+    NotificationAdd(AList, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff', 'Ggg'], cnAdded);
+    AList.Insert(0, 'Aaa');
+    AList.InsertRange(1, ['Bbb', 'Ccc']);
+    AList.InsertRange(3, LStringsObj);
+    AList.InsertRange(5, LStringsIntf);
+    AssertNotificationsExecutedStr;
+
+    { Remove + Delete + DeleteRange }
+
+    NotificationAdd(AList, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff', 'Ggg'], cnRemoved);
+    AList.Remove('Aaa');
+    AList.Delete(0);
+    AList.DeleteRange(0, 5);
+    AssertEquals(AList.Count, 0);
+    AssertNotificationsExecutedStr;
+
+    { ExtractIndex, Extract }
+
+    NotificationAdd(AList, ['Aaa', 'Bbb', 'Ccc'], cnAdded);
+    AList.AddRange(['Aaa', 'Bbb', 'Ccc']);
+    AssertNotificationsExecutedStr;
+    NotificationAdd(AList, ['Aaa', 'Bbb'], cnExtracted);
+    AssertEquals(AList.ExtractIndex(0), 'Aaa');
+    AssertEquals(AList.Extract('Bbb'), 'Bbb');
+    AssertNotificationsExecutedStr;
+
+    { SetItem }
+    NotificationAdd(AList, 'Ccc', cnRemoved);
+    NotificationAdd(AList, 'FPC', cnAdded);
+    AList[0] := 'FPC';
+    AssertNotificationsExecutedStr;
+
+  finally
+    LStringsObj.Free;
+    { Free }
+    NotificationAdd(AList, 'FPC', cnRemoved);
+    AList.Free;
+    AssertNotificationsExecutedStr;
+  end;
+end;
+
+procedure TTestStdCollections.Test_TList_Notification;
+begin
+  Test_TList_Notification(TList<string>.Create);
+end;
+
+procedure TTestStdCollections.Test_TSortedList_Notification;
+var
+  LList: TSortedList<string>;
+begin
+  LList := TSortedList<string>.Create;
+  LList.SortStyle := cssUser;
+  Test_TList_Notification(LList);
+end;
+
+procedure TTestStdCollections.Test_TQueue_Notification;
+var
+  LQueue: TQueue<string>;
+begin
+  LQueue := TQueue<string>.Create();
+  try
+    LQueue.OnNotify := NotifyTestStr;
+
+    { Enqueue }
+    NotificationAdd(LQueue, ['Aaa', 'Bbb', 'Ccc', 'Ddd'], cnAdded);
+    LQueue.Enqueue('Aaa');
+    LQueue.Enqueue('Bbb');
+    LQueue.Enqueue('Ccc');
+    LQueue.Enqueue('Ddd');
+    AssertNotificationsExecutedStr;
+
+    { Dequeue }
+    NotificationAdd(LQueue, 'Aaa', cnRemoved);
+    AssertEquals(LQueue.Dequeue, 'Aaa');
+    AssertNotificationsExecutedStr;
+
+    { Extract }
+    NotificationAdd(LQueue, 'Bbb', cnExtracted);
+    AssertEquals(LQueue.Extract, 'Bbb');
+    AssertNotificationsExecutedStr;
+
+    { Clear }
+    NotificationAdd(LQueue, ['Ccc', 'Ddd'], cnRemoved);
+    LQueue.Clear;
+    AssertNotificationsExecutedStr;
+
+    { Enqueue }
+    NotificationAdd(LQueue, ['FPC', 'Polandball'], cnAdded);
+    LQueue.Enqueue('FPC');
+    LQueue.Enqueue('Polandball');
+    AssertNotificationsExecutedStr;
+  finally
+    NotificationAdd(LQueue, ['FPC', 'Polandball'], cnRemoved);
+    LQueue.Free;
+    AssertNotificationsExecutedStr;
+  end;
+end;
+
+procedure TTestStdCollections.Test_TStack_Notification;
+var
+  LStack: TStack<string>;
+begin
+  LStack := TStack<string>.Create();
+  try
+    LStack.OnNotify := NotifyTestStr;
+
+    { Enqueue }
+    NotificationAdd(LStack, ['Aaa', 'Bbb', 'Ccc', 'Ddd'], cnAdded);
+    LStack.Push('Aaa');
+    LStack.Push('Bbb');
+    LStack.Push('Ccc');
+    LStack.Push('Ddd');
+    AssertNotificationsExecutedStr;
+
+    { Pop }
+    NotificationAdd(LStack, 'Ddd', cnRemoved);
+    AssertEquals(LStack.Pop, 'Ddd');
+    AssertNotificationsExecutedStr;
+
+    { Extract }
+    NotificationAdd(LStack, 'Ccc', cnExtracted);
+    AssertEquals(LStack.Extract, 'Ccc');
+    AssertNotificationsExecutedStr;
+
+    { Clear }
+    NotificationAdd(LStack, ['Bbb', 'Aaa'], cnRemoved);
+    LStack.Clear;
+    AssertNotificationsExecutedStr;
+
+    { Enqueue }
+    NotificationAdd(LStack, ['FPC', 'Polandball'], cnAdded);
+    LStack.Push('FPC');
+    LStack.Push('Polandball');
+    AssertNotificationsExecutedStr;
+  finally
+    NotificationAdd(LStack, ['Polandball', 'FPC'], cnRemoved);
+    LStack.Free;
+    AssertNotificationsExecutedStr;
+  end;
+end;
+
+procedure TTestStdCollections.Test_TObjectList_Notification;
+var
+  LObj: TEnumerable<TObject>;
+  LIntf: IEnumerable<TObject>;
+  O: TArray<TObject>;
+  LList: TObjectList<TObject>;
+  i: Integer;
+begin
+  try
+    CreateObjects(O, 8);
+
+    LList := TObjectList<TObject>.Create(false);
+    LList.OnNotify := NotifyTestObj;
+
+    LObj := EnumerableObjectsObj([O[3], O[4]]);
+    LIntf := EnumerableObjectsIntf([O[5], O[6]]);
+
+    { Add + AddRange }
+
+    NotificationAdd(LList, [O[0], O[1], O[2], O[3], O[4], O[5], O[6]], cnAdded);
+    LList.Add(O[0]);
+    LList.AddRange([O[1], O[2]]);
+    LList.AddRange(LObj);
+    LList.AddRange(LIntf);
+    AssertNotificationsExecutedObj;
+
+    { Clear }
+
+    NotificationAdd(LList, [O[0], O[1], O[2], O[3], O[4], O[5], O[6]], cnRemoved);
+    LList.Clear;
+    AssertNotificationsExecutedObj;
+
+    { Insert + InsertRange }
+
+    NotificationAdd(LList, [O[0], O[1], O[2], O[3], O[4], O[5], O[6]], cnAdded);
+    LList.Insert(0, O[0]);
+    LList.InsertRange(1, [O[1], O[2]]);
+    LList.InsertRange(3, LObj);
+    LList.InsertRange(5, LIntf);
+    AssertNotificationsExecutedObj;
+
+    { Remove + Delete + DeleteRange }
+
+    NotificationAdd(LList, [O[0], O[1], O[2], O[3], O[4], O[5], O[6]], cnRemoved);
+    LList.Remove(O[0]);
+    LList.Delete(0);
+    LList.DeleteRange(0, 5);
+    AssertEquals(LList.Count, 0);
+    AssertNotificationsExecutedObj;
+
+    { ExtractIndex, Extract }
+
+    NotificationAdd(LList, [O[0], O[1], O[2]], cnAdded);
+    LList.AddRange([O[0], O[1], O[2]]);
+    AssertNotificationsExecutedObj;
+    NotificationAdd(LList, [O[0], O[1]], cnExtracted);
+    AssertTrue(LList.ExtractIndex(0) = O[0]);
+    AssertTrue(LList.Extract(O[1]) = O[1]);
+    AssertNotificationsExecutedObj;
+
+    { SetItem }
+    NotificationAdd(LList, O[2], cnRemoved);
+    NotificationAdd(LList, O[7], cnAdded);
+    LList[0] := O[7];
+    AssertNotificationsExecutedObj;
+
+  finally
+    LObj.Free;
+    { Free }
+    NotificationAdd(LList, O[7], cnRemoved);
+    FreeObjects(O);
+    LList.Free;
+    AssertNotificationsExecutedObj;
+  end;
+end;
+
+procedure TTestStdCollections.Test_TObjectQueue_Notification;
+var
+  LQueue: TObjectQueue<TObject>;
+  O: TArray<TObject>;
+begin
+  LQueue := TObjectQueue<TObject>.Create(false);
+  try
+    CreateObjects(O, 6);
+    LQueue.OnNotify := NotifyTestObj;
+
+    { Enqueue }
+    NotificationAdd(LQueue, [O[0], O[1], O[2], O[3]], cnAdded);
+    LQueue.Enqueue(O[0]);
+    LQueue.Enqueue(O[1]);
+    LQueue.Enqueue(O[2]);
+    LQueue.Enqueue(O[3]);
+    AssertNotificationsExecutedObj;
+
+    { Dequeue }
+    NotificationAdd(LQueue, O[0], cnRemoved);
+    LQueue.Dequeue;
+    AssertNotificationsExecutedObj;
+
+    { Extract }
+    NotificationAdd(LQueue, O[1], cnExtracted);
+    AssertTrue(LQueue.Extract = O[1]);
+    AssertNotificationsExecutedObj;
+
+    { Clear }
+    NotificationAdd(LQueue, [O[2], O[3]], cnRemoved);
+    LQueue.Clear;
+    AssertNotificationsExecutedObj;
+
+    { Enqueue }
+    NotificationAdd(LQueue, [O[4], O[5]], cnAdded);
+    LQueue.Enqueue(O[4]);
+    LQueue.Enqueue(O[5]);
+    AssertNotificationsExecutedObj;
+  finally
+    NotificationAdd(LQueue, [O[4], O[5]], cnRemoved);
+    FreeObjects(O);
+    LQueue.Free;
+    AssertNotificationsExecutedObj;
+  end;
+end;
+
+procedure TTestStdCollections.Test_TObjectStack_Notification;
+var
+  LStack: TStack<TObject>;
+  O: TArray<TObject>;
+begin
+  LStack := TObjectStack<TObject>.Create(false);
+  try
+    CreateObjects(O, 6);
+    LStack.OnNotify := NotifyTestObj;
+
+    { Enqueue }
+    NotificationAdd(LStack, [O[0], O[1], O[2], O[3]], cnAdded);
+    LStack.Push(O[0]);
+    LStack.Push(O[1]);
+    LStack.Push(O[2]);
+    LStack.Push(O[3]);
+    AssertNotificationsExecutedObj;
+
+    { Pop }
+    NotificationAdd(LStack, O[3], cnRemoved);
+    AssertTrue(LStack.Pop = O[3]);
+    AssertNotificationsExecutedObj;
+
+    { Extract }
+    NotificationAdd(LStack, O[2], cnExtracted);
+    AssertTrue(LStack.Extract = O[2]);
+    AssertNotificationsExecutedObj;
+
+    { Clear }
+    NotificationAdd(LStack, [O[1], O[0]], cnRemoved);
+    LStack.Clear;
+    AssertNotificationsExecutedObj;
+
+    { Enqueue }
+    NotificationAdd(LStack, [O[4], O[5]], cnAdded);
+    LStack.Push(O[4]);
+    LStack.Push(O[5]);
+    AssertNotificationsExecutedObj;
+  finally
+    NotificationAdd(LStack, [O[5], O[4]], cnRemoved);
+    FreeObjects(O);
+    LStack.Free;
+    AssertNotificationsExecutedObj;
+  end;
+end;
+
+procedure TTestStdCollections.Test_GenericListBox;
+begin
+  TGenericListBox<Integer>.Test(Self);
 end;
 
 begin

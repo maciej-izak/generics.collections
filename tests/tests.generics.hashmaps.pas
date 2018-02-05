@@ -22,19 +22,20 @@
 unit tests.generics.hashmaps;
 
 {$mode delphi}
+{$MACRO ON}
 
 interface
 
 uses
-  fpcunit, testregistry, testutils, typinfo,
-  Classes, SysUtils, StrUtils, Generics.Collections, Generics.Defaults;
+  fpcunit, testregistry, testutils, tests.generics.utils,
+  typinfo, Classes, SysUtils, StrUtils, Generics.Collections, Generics.Defaults;
 
 type
   PCollectionNotification = ^TCollectionNotification;
 
   { TTestHashMaps }
 
-  TTestHashMaps= class(TTestCase)
+  TTestHashMaps= class(TTestCollections)
   private
     procedure CountAsKey_Check(const AWhat: string; AValue, AExpectedValue: Integer;
       AAction: PCollectionNotification);
@@ -49,6 +50,14 @@ type
     procedure Test_CountAsKey_CuckooD2;
     procedure Test_CountAsKey_CuckooD4;
     procedure Test_CountAsKey_CuckooD6;
+
+    procedure Test_OpenAddressingLP_Notification;
+    procedure Test_OpenAddressingLPT_Notification;
+    procedure Test_OpenAddressingQP_Notification;
+    procedure Test_OpenAddressingDH_Notification;
+    procedure Test_CuckooD2_Notification;
+    procedure Test_CuckooD4_Notification;
+    procedure Test_CuckooD6_Notification;
 
     procedure Test_TryAddOrSetOrGetValue;
   end;
@@ -96,18 +105,22 @@ begin
   CountAsKey_Notify('Key', ASender, AItem, AAction);
 end;
 
+{$DEFINE TEST_COUNT_AS_KEY :=
+  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
+  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
+  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
+  LDictionary.Add(LDictionary.Count,LDictionary.Count);
+  CountAsKey_Check('Item', LDictionary[0], 0, nil);
+  LDictionary.Free
+}
+
 procedure TTestHashMaps.Test_CountAsKey_OpenAddressingLP;
 var
   LDictionary: TOpenAddressingLP<Integer, Integer>;
 begin
   // TOpenAddressingLP
   LDictionary := TOpenAddressingLP<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_OpenAddressingLPT;
@@ -116,12 +129,7 @@ var
 begin
   // TOpenAddressingLPT
   LDictionary := TOpenAddressingLPT<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_OpenAddressingQP;
@@ -130,12 +138,7 @@ var
 begin
   // TOpenAddressingQP
   LDictionary := TOpenAddressingQP<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_OpenAddressingDH;
@@ -144,12 +147,7 @@ var
 begin
   // TOpenAddressingDH
   LDictionary := TOpenAddressingDH<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_CuckooD2;
@@ -158,12 +156,7 @@ var
 begin
   // TCuckooD2
   LDictionary := TCuckooD2<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_CuckooD4;
@@ -172,12 +165,7 @@ var
 begin
   // TCuckooD4
   LDictionary := TCuckooD4<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
-  LDictionary.Free;
+  TEST_COUNT_AS_KEY;
 end;
 
 procedure TTestHashMaps.Test_CountAsKey_CuckooD6;
@@ -186,12 +174,111 @@ var
 begin
   // TCuckooD6
   LDictionary := TCuckooD6<Integer, Integer>.Create;
-  LDictionary.OnKeyNotify := CountAsKey_NotifyKey;
-  LDictionary.OnValueNotify := CountAsKey_NotifyValue;
-  CountAsKey_Check('Count', LDictionary.Count, 0, nil);
-  LDictionary.Add(LDictionary.Count,LDictionary.Count);
-  CountAsKey_Check('Item', LDictionary[0], 0, nil);
+  TEST_COUNT_AS_KEY;
+end;
+
+{$DEFINE TEST_NOTIFICATIONS :=
+try
+  LDictionary.OnKeyNotify := NotifyTestStr;
+  LDictionary.OnValueNotify := NotifyTestStr;
+
+  // Add
+  NotificationAdd(LDictionary, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff'], cnAdded);
+  LDictionary.Add('Aaa', 'Bbb');
+  LDictionary.Add('Ccc', 'Ddd');
+  LDictionary.Add('Eee', 'Fff');
+  AssertNotificationsExecutedStr;
+
+  // Remove and ExtractPair
+  NotificationAdd(LDictionary, ['Ccc', 'Ddd'], cnRemoved);
+  LDictionary.Remove('Ccc');
+  AssertNotificationsExecutedStr;
+
+  NotificationAdd(LDictionary, ['Aaa', 'Bbb'], cnExtracted);
+  with LDictionary.ExtractPair('Aaa') do
+  begin
+    AssertEquals(Key, 'Aaa');
+    AssertEquals(Value, 'Bbb');
+  end;
+  AssertNotificationsExecutedStr;
+
+  // Clear
+  NotificationAdd(LDictionary, ['Eee', 'Fff'], cnRemoved);
+  LDictionary.Clear;
+  AssertNotificationsExecutedStr;
+
+  // SetItem
+  NotificationAdd(LDictionary, ['FPC', 'Polandball'], cnAdded);
+  LDictionary.AddOrSetValue('FPC', 'Polandball');
+  AssertNotificationsExecutedStr;
+  NotificationAdd(LDictionary, 'Polandball', cnRemoved);
+  NotificationAdd(LDictionary, 'xD', cnAdded);
+  NotificationAdd(LDictionary, 'xD', cnRemoved);
+  NotificationAdd(LDictionary, 'Polandball', cnAdded);
+  LDictionary['FPC'] := 'xD';
+  LDictionary.AddOrSetValue('FPC', 'Polandball');
+  AssertNotificationsExecutedStr;
+finally
+  NotificationAdd(LDictionary, ['FPC', 'Polandball'], cnRemoved);
   LDictionary.Free;
+  AssertNotificationsExecutedStr;
+end
+}
+
+procedure TTestHashMaps.Test_OpenAddressingLP_Notification;
+var
+  LDictionary: TOpenAddressingLP<string, string>;
+begin
+  LDictionary := TOpenAddressingLP<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_OpenAddressingLPT_Notification;
+var
+  LDictionary: TOpenAddressingLPT<string, string>;
+begin
+  LDictionary := TOpenAddressingLPT<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_OpenAddressingQP_Notification;
+var
+  LDictionary: TOpenAddressingQP<string, string>;
+begin
+  LDictionary := TOpenAddressingQP<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_OpenAddressingDH_Notification;
+var
+  LDictionary: TOpenAddressingDH<string, string>;
+begin
+  LDictionary := TOpenAddressingDH<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_CuckooD2_Notification;
+var
+  LDictionary: TCuckooD2<string, string>;
+begin
+  LDictionary := TCuckooD2<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_CuckooD4_Notification;
+var
+  LDictionary: TCuckooD4<string, string>;
+begin
+  LDictionary := TCuckooD4<string, string>.Create;
+  TEST_NOTIFICATIONS;
+end;
+
+procedure TTestHashMaps.Test_CuckooD6_Notification;
+var
+  LDictionary: TCuckooD6<string, string>;
+begin
+  LDictionary := TCuckooD6<string, string>.Create;
+  TEST_NOTIFICATIONS;
 end;
 
 procedure TTestHashMaps.Test_TryAddOrSetOrGetValue;

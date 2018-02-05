@@ -25,7 +25,7 @@ unit tests.generics.sets;
 interface
 
 uses
-  fpcunit, testregistry, testutils,
+  fpcunit, testregistry, testutils, tests.generics.utils,
   Classes, SysUtils, Generics.Collections;
 
 type
@@ -35,7 +35,9 @@ type
 
   { TTestSets }
 
-  TTestSets = class(TTestCase)
+  TTestSets = class(TTestCollections)
+  protected
+    procedure Test_TCustomSet_Notification(ASet: TCustomSet<string>);
   public
     constructor Create; override;
   published
@@ -45,6 +47,9 @@ type
     procedure Test_HashSet;
     procedure Test_SortedSet;
     procedure Test_SortedHashSet;
+    procedure Test_THashSet_Notification;
+    procedure Test_TSortedSet_Notification;
+    procedure Test_TSortedHashSet_Notification;
   end;
 
   { TGenericTestSets }
@@ -248,6 +253,95 @@ end;
 procedure TTestSets.Test_SortedHashSet;
 begin
   TGenericTestSets<TSortedHashSet_Integer>.Test_Set_Sorted;
+end;
+
+procedure TTestSets.Test_TCustomSet_Notification(ASet: TCustomSet<string>);
+var
+  LSet: THashSet<string>;
+  LStringsObj: TEnumerable<string>;
+  LStringsIntf: IEnumerable<string>;
+begin
+  LSet :=  THashSet<string>.Create;
+  try
+    LStringsObj := EnumerableStringsObj(['Ddd', 'Eee']);
+    LStringsIntf := EnumerableStringsIntf(['Fff', 'Ggg']);
+    ASet.OnNotify := NotifyTestStr;
+
+    { Add + AddRange }
+    NotificationAdd(ASet, ['Aaa', 'Bbb', 'Ccc', 'Ddd', 'Eee', 'Fff', 'Ggg'], cnAdded);
+    AssertTrue(ASet.Add('Aaa'));
+    AssertTrue(ASet.AddRange(['Bbb', 'Ccc']));
+    AssertTrue(ASet.AddRange(LStringsObj));
+    AssertTrue(ASet.AddRange(LStringsIntf));
+    AssertNotificationsExecutedStr;
+
+    { Remove and Extract }
+    NotificationAdd(ASet, 'Ccc', cnRemoved);
+    NotificationAdd(ASet, 'Aaa', cnExtracted);
+    AssertTrue(ASet.Remove('Ccc'));
+    AssertEquals(ASet.Extract('Aaa'), 'Aaa');
+    AssertNotificationsExecutedStr;
+
+    { ExceptWith }
+    LSet.Add('Bbb');
+    NotificationAdd(ASet, 'Bbb', cnRemoved);
+    ASet.ExceptWith(LSet);
+    AssertNotificationsExecutedStr;
+
+    { IntersectWith }
+    LSet.AddRange(['Eee', 'Fff', 'Ggg']);
+    NotificationAdd(ASet, 'Ddd', cnRemoved);
+    ASet.IntersectWith(LSet);
+    AssertNotificationsExecutedStr;
+
+    { SymmetricExceptWith }
+    LSet.Clear;
+    LSet.AddRange(['Fff', 'FPC']);
+    NotificationAdd(ASet, 'FPC', cnAdded);
+    NotificationAdd(ASet, 'Fff', cnRemoved);
+    ASet.SymmetricExceptWith(LSet);
+    AssertNotificationsExecutedStr;
+
+    { Small clean up }
+    NotificationAdd(ASet, 'Eee', cnRemoved);
+    NotificationAdd(ASet, 'Ggg', cnExtracted);
+    AssertTrue(ASet.Remove('Eee'));
+    AssertEquals(ASet.Extract('Ggg'), 'Ggg');
+    AssertNotificationsExecutedStr;
+
+    { UnionWith }
+    LSet.Clear;
+    LSet.Add('Polandball');
+    NotificationAdd(ASet, 'Polandball', cnAdded);
+    ASet.UnionWith(LSet);
+    AssertNotificationsExecutedStr;
+
+    { Clear }
+    NotificationAdd(ASet, 'FPC', cnRemoved);
+    AssertTrue(ASet.Remove('FPC'));
+    AssertNotificationsExecutedStr;
+    NotificationAdd(ASet, 'Polandball', cnRemoved);
+    ASet.Clear;
+    AssertNotificationsExecutedStr;
+  finally
+    LSet.Free;
+    ASet.Free;
+  end;
+end;
+
+procedure TTestSets.Test_THashSet_Notification;
+begin
+  Test_TCustomSet_Notification(THashSet<string>.Create);
+end;
+
+procedure TTestSets.Test_TSortedSet_Notification;
+begin
+  Test_TCustomSet_Notification(TSortedSet<string>.Create);
+end;
+
+procedure TTestSets.Test_TSortedHashSet_Notification;
+begin
+  Test_TCustomSet_Notification(TSortedHashSet<string>.Create);
 end;
 
 begin
