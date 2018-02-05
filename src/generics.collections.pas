@@ -489,6 +489,8 @@ type
   { TCustomHashSet<T> }
 
   TCustomSet<T> = class(TEnumerableWithPointers<T>)
+  protected
+    FOnNotify: TCollectionNotifyEvent<T>;
   public type
     PT = ^T;
   protected type
@@ -540,6 +542,8 @@ type
   { THashSet<T> }
 
   THashSet<T> = class(TCustomSet<T>)
+  private
+    procedure InternalDictionaryNotify(ASender: TObject; constref AItem: T; AAction: TCollectionNotification);
   protected
     FInternalDictionary: TOpenAddressingLP<T, TEmptyRecord>;
   public type
@@ -830,6 +834,8 @@ type
   end;
 
   TSortedSet<T> = class(TCustomSet<T>)
+  private
+    procedure InternalAVLTreeNotify(ASender: TObject; constref AItem: T; AAction: TCollectionNotification);
   protected
     FInternalTree: TAVLTree<T>;
   public type
@@ -868,6 +874,8 @@ type
   end;
 
   TSortedHashSet<T> = class(TCustomSet<T>)
+  private
+    procedure InternalDictionaryNotify(ASender: TObject; constref AItem: PT; AAction: TCollectionNotification);
   protected
     FInternalDictionary: TOpenAddressingLP<PT, TEmptyRecord>;
     FInternalTree: TAVLTree<T>;
@@ -1601,7 +1609,7 @@ begin
   if (ACount < 0) or (AIndex < 0) or (AIndex + ACount > Count) then
     raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
 
-  SetLength(LDeleted, Count);
+  SetLength(LDeleted, ACount);
   System.Move(FItems[AIndex], LDeleted[0], ACount * SizeOf(T));
 
   LMoveDelta := Count - (AIndex + ACount);
@@ -2473,6 +2481,11 @@ end;
 
 { THashSet<T> }
 
+procedure THashSet<T>.InternalDictionaryNotify(ASender: TObject; constref AItem: T; AAction: TCollectionNotification);
+begin
+  FOnNotify(Self, AItem, AAction);
+end;
+
 function THashSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
@@ -2490,7 +2503,11 @@ end;
 
 procedure THashSet<T>.SetOnNotify(AValue: TCollectionNotifyEvent<T>);
 begin
-  FInternalDictionary.OnKeyNotify := AValue;
+  FOnNotify := AValue;
+  if Assigned(AValue) then
+    FInternalDictionary.OnKeyNotify := InternalDictionaryNotify
+  else
+    FInternalDictionary.OnKeyNotify := nil;
 end;
 
 function THashSet<T>.GetEnumerator: TCustomSetEnumerator;
@@ -2781,6 +2798,8 @@ begin
     DisposeAllNodes(ANode.Left);
   if ANode.Right<>nil then
     DisposeAllNodes(ANode.Right);
+
+  NodeNotify(ANode, cnRemoved, true);
   Dispose(ANode);
 end;
 
@@ -3720,6 +3739,11 @@ end;
 
 { TSortedSet<T> }
 
+procedure TSortedSet<T>.InternalAVLTreeNotify(ASender: TObject; constref AItem: T; AAction: TCollectionNotification);
+begin
+  FOnNotify(Self, AItem, AAction);
+end;
+
 function TSortedSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
@@ -3737,7 +3761,11 @@ end;
 
 procedure TSortedSet<T>.SetOnNotify(AValue: TCollectionNotifyEvent<T>);
 begin
-  FInternalTree.OnKeyNotify := AValue;
+  FOnNotify := AValue;
+  if Assigned(AValue) then
+    FInternalTree.OnKeyNotify := InternalAVLTreeNotify
+  else
+    FInternalTree.OnKeyNotify := nil;
 end;
 
 function TSortedSet<T>.GetEnumerator: TCustomSetEnumerator;
@@ -3880,6 +3908,11 @@ end;
 
 { TSortedHashSet<T> }
 
+procedure TSortedHashSet<T>.InternalDictionaryNotify(ASender: TObject; constref AItem: PT; AAction: TCollectionNotification);
+begin
+  FOnNotify(Self, AItem^, AAction);
+end;
+
 function TSortedHashSet<T>.GetPtrEnumerator: TEnumerator<PT>;
 begin
   Result := TPointersEnumerator.Create(Self);
@@ -3902,7 +3935,11 @@ end;
 
 procedure TSortedHashSet<T>.SetOnNotify(AValue: TCollectionNotifyEvent<T>);
 begin
-  FInternalTree.OnKeyNotify := AValue;
+  FOnNotify := AValue;
+  if Assigned(AValue) then
+    FInternalDictionary.OnKeyNotify := InternalDictionaryNotify
+  else
+    FInternalDictionary.OnKeyNotify := nil;
 end;
 
 function TSortedHashSet<T>.GetEnumerator: TCustomSetEnumerator;
