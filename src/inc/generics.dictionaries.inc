@@ -2058,10 +2058,12 @@ begin
   LLookupResult := Lookup(AKey, LHashListOrIndex);
 
   if LLookupResult = LR_NIL then
-  begin
-    PrepareAddingItem;
-    DoAdd(AKey, AValue, LHashListOrIndex);
-  end
+    Add(AKey, AValue)
+    // more optimal version for AddOrSetValue has some bug : see Test_CuckooD2_Notification
+    //begin
+    //  PrepareAddingItem;
+    //  DoAdd(AKey, AValue, LHashListOrIndex);
+    //end
   else
     SetItem(AValue, LHashListOrIndex, LLookupResult);
 end;
