@@ -745,7 +745,12 @@ type
     constructor Create; virtual; overload;
     constructor Create(const AComparer: IComparer<TKey>); virtual; overload;
 
-    function NewNode: PNode; virtual; abstract;
+    function NewNode: PNode;
+    function NewNodeArray(ACount: SizeInt): PNode; overload;
+    procedure NewNodeArray(ACount: SizeInt; out AArray: TArray<PNode>); overload;
+    procedure DisposeNode(ANode: PNode);
+    procedure DisposeNodeArray(ACount: SizeInt; ANode: PNode); overload;
+    procedure DisposeNodeArray(var AArray: TArray<PNode>); overload;
 
     destructor Destroy; override;
     function AddNode(ANode: PNode): boolean; overload; inline;
@@ -788,8 +793,6 @@ type
   end;
 
   TAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, TEmptyRecord>)
-  public
-    function NewNode: PNode; override;
   end;
 
   TIndexedAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, SizeInt>)
@@ -805,7 +808,6 @@ type
     procedure NodeAdded(ANode: PNode); override;
     procedure DeletingNode(ANode: PNode; AOrigin: boolean); override;
   public
-    function NewNode: PNode; override;
     function GetNodeAtIndex(AIndex: SizeInt): PNode;
     function NodeToIndex(ANode: PNode): SizeInt;
 
@@ -3312,6 +3314,56 @@ begin
   FComparer := AComparer;
 end;
 
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.NewNode: PNode;
+begin
+  Result := New(PNode);
+  Result^ := Default(TNode);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.NewNodeArray(ACount: SizeInt): PNode;
+var
+  LSize: SizeInt;
+begin
+  LSize := SizeOf(ACount) * SizeOf(TNode);
+  GetMem(LSize);
+  FillChar(Result^, LSize, #0);
+  InitializeArray(Result, TypeInfo(TNode), ACount);
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.NewNodeArray(ACount: SizeInt; out AArray: TArray<PNode>);
+var
+  i: Integer;
+  LNode: PNode;
+begin
+  LNode := NewNodeArray(ACount);
+  SetLength(AArray, ACount);
+  for i := 0 to ACount-1 do
+  begin
+    AArray[i] := LNode;
+    Inc(LNode);
+  end;
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.DisposeNode(ANode: PNode);
+begin
+  Dispose(ANode);
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.DisposeNodeArray(ACount: SizeInt; ANode: PNode);
+begin
+  FinalizeArray(ANode, TypeInfo(TNode), ACount);
+  FreeMem(ANode);
+end;
+
+procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.DisposeNodeArray(var AArray: TArray<PNode>);
+var
+  i: Integer;
+begin
+  for i := 0 to High(AArray) do
+    Dispose(AArray[i]);
+  AArray := nil;
+end;
+
 destructor TCustomAVLTreeMap<TREE_CONSTRAINTS>.Destroy;
 begin
   FNodes.Free;
@@ -3531,14 +3583,6 @@ begin
   end;
 end;
 
-{ TAVLTreeMap<TKey, TValue> }
-
-function TAVLTreeMap<TKey, TValue>.NewNode: PNode;
-begin
-  Result := New(PNode);
-  Result^ := Default(TNode);
-end;
-
 { TIndexedAVLTreeMap<TKey, TValue> }
 
 procedure TIndexedAVLTreeMap<TKey, TValue>.RotateRightRight(ANode: PNode);
@@ -3611,12 +3655,6 @@ begin
       Dec(LParent.Data.Info);
     ANode:=LParent;
   until false;
-end;
-
-function TIndexedAVLTreeMap<TKey, TValue>.NewNode: PNode;
-begin
-  Result := PNode(New(PNode));
-  Result^ := Default(TNode);
 end;
 
 function TIndexedAVLTreeMap<TKey, TValue>.GetNodeAtIndex(AIndex: SizeInt): PNode;
