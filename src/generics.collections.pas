@@ -675,8 +675,6 @@ type
     procedure NodeAdded(ANode: PNode); virtual;
     procedure DeletingNode(ANode: PNode; AOrigin: boolean); virtual;
 
-    function AddNode: PNode; virtual; abstract;
-
     function DoRemove(ANode: PNode; ACollectionNotification: TCollectionNotification; ADispose: boolean): TValue;
     procedure DisposeAllNodes(ANode: PNode); overload;
 
@@ -738,7 +736,8 @@ type
   private
     FNodes: TNodeCollection;
     function GetNodeCollection: TNodeCollection;
-    procedure InternalAdd(ANode, AParent: PNode);
+    procedure InternalAdd(ANode, AParent: PNode); overload;
+    function InternalAdd(ANode: PNode; ADispisable: boolean): PNode; overload;
     procedure InternalDelete(ANode: PNode);
     function GetKeys: TKeyCollection;
     function GetValues: TValueCollection;
@@ -746,8 +745,12 @@ type
     constructor Create; virtual; overload;
     constructor Create(const AComparer: IComparer<TKey>); virtual; overload;
 
+    function NewNode: PNode; virtual; abstract;
+
     destructor Destroy; override;
-    function Add(constref AKey: TKey; constref AValue: TValue): PNode;
+    function AddNode(ANode: PNode): boolean; overload; inline;
+    function Add(constref APair: TTreePair): PNode; overload; inline;
+    function Add(constref AKey: TKey; constref AValue: TValue): PNode; overload; inline;
     function Remove(constref AKey: TKey; ADisposeNode: boolean = true): boolean;
     function ExtractPair(constref AKey: TKey; ADisposeNode: boolean = true): TTreePair; overload;
     function ExtractPair(constref ANode: PNode; ADispose: boolean = true): TTreePair; overload;
@@ -785,8 +788,8 @@ type
   end;
 
   TAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, TEmptyRecord>)
-  protected
-    function AddNode: PNode; override;
+  public
+    function NewNode: PNode; override;
   end;
 
   TIndexedAVLTreeMap<TKey, TValue> = class(TCustomAVLTreeMap<TKey, TValue, SizeInt>)
@@ -801,9 +804,8 @@ type
 
     procedure NodeAdded(ANode: PNode); override;
     procedure DeletingNode(ANode: PNode; AOrigin: boolean); override;
-
-    function AddNode: PNode; override;
   public
+    function NewNode: PNode; override;
     function GetNodeAtIndex(AIndex: SizeInt): PNode;
     function NodeToIndex(ANode: PNode): SizeInt;
 
@@ -818,7 +820,9 @@ type
   public type
     TItemEnumerator = TKeyEnumerator;
   public
-    function Add(constref AValue: T): PNode; reintroduce;
+    function Add(constref AValue: T): PNode; reintroduce; inline;
+    function AddNode(ANode: PNode): boolean; reintroduce; inline;
+
     property OnNotify: TCollectionNotifyEvent<T> read FOnKeyNotify write FOnKeyNotify;
   end;
 
@@ -829,7 +833,9 @@ type
   public type
     TItemEnumerator = TKeyEnumerator;
   public
-    function Add(constref AValue: T): PNode; reintroduce;
+    function Add(constref AValue: T): PNode; reintroduce; inline;
+    function AddNode(ANode: PNode): boolean; reintroduce; inline;
+
     property OnNotify: TCollectionNotifyEvent<T> read FOnKeyNotify write FOnKeyNotify;
   end;
 
@@ -3137,6 +3143,40 @@ begin
   end;
 end;
 
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.InternalAdd(ANode: PNode; ADispisable: boolean): PNode;
+var
+  LParent: PNode;
+begin
+  Result := ANode;
+  case FindInsertNode(ANode, LParent) of
+    -1: LParent.Left := ANode;
+    0:
+      if Assigned(LParent) then
+        case FDuplicates of
+          dupAccept: LParent.Right := ANode;
+          dupIgnore:
+            begin
+              LParent.Right := nil;
+              if ADispisable then
+                Dispose(ANode);
+              Exit(LParent);
+            end;
+          dupError:
+            begin
+              LParent.Right := nil;
+              if ADispisable then
+                Dispose(ANode);
+              Result := nil;
+              raise EListError.Create(SCollectionDuplicate);
+            end;
+        end;
+    1: LParent.Right := ANode;
+  end;
+
+  InternalAdd(ANode, LParent);
+  NodeNotify(ANode, cnAdded, false);
+end;
+
 procedure TCustomAVLTreeMap<TREE_CONSTRAINTS>.InternalDelete(ANode: PNode);
 var
   t, y, z: PNode;
@@ -3278,40 +3318,25 @@ begin
   Clear;
 end;
 
-function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref AKey: TKey; constref AValue: TValue): PNode;
-var
-  LParent: PNode;
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.AddNode(ANode: PNode): boolean;
 begin
-  Result := AddNode;
+  Result := ANode=InternalAdd(ANode, false);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref APair: TTreePair): PNode;
+begin
+  Result := NewNode;
+  Result.Data.Key := APair.Key;
+  Result.Data.Value := APair.Value;
+  Result := InternalAdd(Result, true);
+end;
+
+function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Add(constref AKey: TKey; constref AValue: TValue): PNode;
+begin
+  Result := NewNode;
   Result.Data.Key := AKey;
   Result.Data.Value := AValue;
-
-  // insert new node
-  case FindInsertNode(Result, LParent) of
-    -1: LParent.Left := Result;
-    0:
-      if Assigned(LParent) then
-        case FDuplicates of
-          dupAccept: LParent.Right := Result;
-          dupIgnore:
-            begin
-              LParent.Right := nil;
-              Dispose(Result);
-              Exit(LParent);
-            end;
-          dupError:
-            begin
-              LParent.Right := nil;
-              Dispose(Result);
-              Result := nil;
-              raise EListError.Create(SCollectionDuplicate);
-            end;
-        end;
-    1: LParent.Right := Result;
-  end;
-
-  InternalAdd(Result, LParent);
-  NodeNotify(Result, cnAdded, false);
+  Result := InternalAdd(Result, true);
 end;
 
 function TCustomAVLTreeMap<TREE_CONSTRAINTS>.Remove(constref AKey: TKey; ADisposeNode: boolean): boolean;
@@ -3508,7 +3533,7 @@ end;
 
 { TAVLTreeMap<TKey, TValue> }
 
-function TAVLTreeMap<TKey, TValue>.AddNode: PNode;
+function TAVLTreeMap<TKey, TValue>.NewNode: PNode;
 begin
   Result := New(PNode);
   Result^ := Default(TNode);
@@ -3588,7 +3613,7 @@ begin
   until false;
 end;
 
-function TIndexedAVLTreeMap<TKey, TValue>.AddNode: PNode;
+function TIndexedAVLTreeMap<TKey, TValue>.NewNode: PNode;
 begin
   Result := PNode(New(PNode));
   Result^ := Default(TNode);
@@ -3701,11 +3726,21 @@ begin
   Result := inherited Add(AValue, EmptyRecord);
 end;
 
+function TAVLTree<T>.AddNode(ANode: PNode): boolean;
+begin
+  Result := inherited AddNode(ANode);
+end;
+
 { TIndexedAVLTree<T> }
 
 function TIndexedAVLTree<T>.Add(constref AValue: T): PNode;
 begin
   Result := inherited Add(AValue, EmptyRecord);
+end;
+
+function TIndexedAVLTree<T>.AddNode(ANode: PNode): boolean;
+begin
+  Result := inherited AddNode(ANode);
 end;
 
 { TSortedSet<T>.TSortedSetEnumerator }
@@ -3802,7 +3837,7 @@ begin
   if not Result then
     Exit;
 
-  LNodePtr := FInternalTree.AddNode;
+  LNodePtr := FInternalTree.NewNode;
   LNodePtr^.Data.Key := AValue;
 
   case LCompare of
