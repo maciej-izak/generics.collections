@@ -59,6 +59,9 @@ type
     procedure Test_CuckooD4_Notification;
     procedure Test_CuckooD6_Notification;
 
+    procedure Test_OpenAddressingLP_TrimExcess;
+    procedure Test_CuckooD2_TrimExcess;
+
     procedure Test_TryAddOrSetOrGetValue;
   end;
 
@@ -279,6 +282,38 @@ var
 begin
   LDictionary := TCuckooD6<string, string>.Create;
   TEST_NOTIFICATIONS;
+end;
+
+{$DEFINE TEST_TRIMEXCESS :=
+  try
+    for i := 1 to 8 do
+      LDictionary.Add(i, EmptyRecord);
+    LDictionary.Remove(1);
+
+    CheckNotEquals(LDictionary.Capacity, LDictionary.Count);
+    LDictionary.TrimExcess;
+    AssertEquals(LDictionary.Capacity, 8);
+  finally
+    LDictionary.Free;
+  end;
+}
+
+procedure TTestHashMaps.Test_OpenAddressingLP_TrimExcess;
+var
+  LDictionary: TOpenAddressingLP<Integer, TEmptyRecord>;
+  i: Integer;
+begin
+  LDictionary := TOpenAddressingLP<Integer, TEmptyRecord>.Create;
+  TEST_TRIMEXCESS;
+end;
+
+procedure TTestHashMaps.Test_CuckooD2_TrimExcess;
+var
+  LDictionary: TCuckooD2<Integer, TEmptyRecord>;
+  i: Integer;
+begin
+  LDictionary := TCuckooD2<Integer, TEmptyRecord>.Create;
+  TEST_TRIMEXCESS;
 end;
 
 procedure TTestHashMaps.Test_TryAddOrSetOrGetValue;

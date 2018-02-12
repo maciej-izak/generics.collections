@@ -26,7 +26,7 @@ unit tests.generics.trees;
 interface
 
 uses
-  fpcunit, testregistry, testutils,
+  fpcunit, testregistry, testutils, tests.generics.utils,
   Classes, SysUtils, Generics.Collections;
 
 type
@@ -35,10 +35,16 @@ type
 
   { TTestTrees }
 
-  TTestTrees = class(TTestCase)
+  TTestTrees = class(TTestCollections)
   published
+    procedure Test_IndexedAVLTree_Add_General;
     procedure Test_IndexedAVLTree_Add;
     procedure Test_IndexedAVLTree_Delete;
+
+    procedure Test_TAVLTreeMap_Notification;
+    procedure Test_TIndexedAVLTreeMap_Notification;
+    procedure Test_TAVLTree_Notification;
+    procedure Test_TIndexedAVLTree_Notification;
   end;
 
 implementation
@@ -48,7 +54,9 @@ type
 
 { TTestTrees }
 
-procedure TTestTrees.Test_IndexedAVLTree_Add;
+procedure TTestTrees.Test_IndexedAVLTree_Add_General;
+const
+  _COUNT = 999;
 var
   LNumbers: THashSet<Integer>;
   i, j: Integer;
@@ -60,25 +68,43 @@ begin
   LTree := TStringsTree.Create;
   LNodes := TList<TStringsTree.PNode>.Create;
 
-  // check consistency of adding new nodes to Indexed AVL
-  for i := 0 to 999 do
-  begin
-    LNodes.Add(LTree.Add('0'+i.ToString));
-    LNumbers.Clear;
-    for n in LTree.Nodes do
-      Check(LNumbers.Add(LTree.NodeToIndex(n)), 'Wrong index (duplicate) of '+ i.ToString + ' for node ' + n.Key);
-    for j := 0 to LNodes.Count - 1 do
-      Check(LNumbers.Contains(j), 'Missing index ' + j.ToString + ' for i = ' + i.ToString);
-    LTree.ConsistencyCheck;
-    CheckEquals(i+1, LTree.Count, 'Wrong tree count');
+  try
+    // check consistency of adding new nodes to Indexed AVL
+    for i := 0 to _COUNT do
+    begin
+      LNodes.Add(LTree.Add('0'+i.ToString));
+      LNumbers.Clear;
+      for n in LTree.Nodes do
+        Check(LNumbers.Add(LTree.NodeToIndex(n)), 'Wrong index (duplicate) of '+ i.ToString + ' for node ' + n.Key);
+      for j := 0 to LNodes.Count - 1 do
+        Check(LNumbers.Contains(j), 'Missing index ' + j.ToString + ' for i = ' + i.ToString);
+      LTree.ConsistencyCheck;
+      CheckEquals(i+1, LTree.Count, 'Wrong tree count');
+    end;
+  finally
+    LNodes.Free;
+    LTree.Free;
+    LNumbers.Free;
   end;
+end;
 
-  LNodes.Free;
-  LTree.Free;
-  LNumbers.Free;
+procedure TTestTrees.Test_IndexedAVLTree_Add;
+var
+  LTree: TStringsTree;
+begin
+  LTree := TStringsTree.Create;
+
+  try
+    LTree.Duplicates:=dupAccept;
+    LTree.Add('Aaa');
+  finally
+    LTree.Free;
+  end;
 end;
 
 procedure TTestTrees.Test_IndexedAVLTree_Delete;
+const
+  _COUNT = 999;
 var
   LNumbers: THashSet<Integer>;
   i, j: Integer;
@@ -90,25 +116,47 @@ begin
   LTree := TStringsTree.Create;
   LNodes := TList<TStringsTree.PNode>.Create;
 
-  for i := 0 to 999 do
-    LNodes.Add(LTree.Add('0'+i.ToString));
+  try
+    for i := 0 to _COUNT do
+      LNodes.Add(LTree.Add('0'+i.ToString));
 
-  // check consistency of deleting nodes from Indexed AVL
-  for i := 0 to 999 do
-  begin
-    LTree.Delete(LNodes.ExtractIndex(Random(LNodes.count)));
-    LNumbers.Clear;
-    for n in LTree.Nodes do
-      Check(LNumbers.Add(LTree.NodeToIndex(n)), 'Wrong index (duplicate) of '+ i.ToString + ' for node ' + n.Key);
-    for j := 0 to LNodes.Count - 1 do
-      Check(LNumbers.Contains(j), 'Missing index ' + j.ToString + ' for i = ' + i.ToString);
-    LTree.ConsistencyCheck;
-    CheckEquals(999-i, LTree.Count, 'Wrong tree count');
+    // check consistency of deleting nodes from Indexed AVL
+    for i := 0 to _COUNT do
+    begin
+      LTree.Delete(LNodes.ExtractIndex(Random(LNodes.count)));
+      LNumbers.Clear;
+      for n in LTree.Nodes do
+        Check(LNumbers.Add(LTree.NodeToIndex(n)), 'Wrong index (duplicate) of '+ i.ToString + ' for node ' + n.Key);
+      for j := 0 to LNodes.Count - 1 do
+        Check(LNumbers.Contains(j), 'Missing index ' + j.ToString + ' for i = ' + i.ToString);
+      LTree.ConsistencyCheck;
+      CheckEquals(_COUNT-i, LTree.Count, 'Wrong tree count');
+    end;
+  finally
+    LNodes.Free;
+    LTree.Free;
+    LNumbers.Free;
   end;
+end;
 
-  LNodes.Free;
-  LTree.Free;
-  LNumbers.Free;
+procedure TTestTrees.Test_TAVLTreeMap_Notification;
+begin
+
+end;
+
+procedure TTestTrees.Test_TIndexedAVLTreeMap_Notification;
+begin
+
+end;
+
+procedure TTestTrees.Test_TAVLTree_Notification;
+begin
+
+end;
+
+procedure TTestTrees.Test_TIndexedAVLTree_Notification;
+begin
+
 end;
 
 begin

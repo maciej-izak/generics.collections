@@ -59,6 +59,8 @@ type
     procedure Test_TObjectList_Notification;
     procedure Test_TObjectQueue_Notification;
     procedure Test_TObjectStack_Notification;
+
+    procedure Test_TrimExcess;
   end;
 
   TGenericListBox<T> = class
@@ -667,7 +669,7 @@ begin
   try
     LStack.OnNotify := NotifyTestStr;
 
-    { Enqueue }
+    { Push }
     NotificationAdd(LStack, ['Aaa', 'Bbb', 'Ccc', 'Ddd'], cnAdded);
     LStack.Push('Aaa');
     LStack.Push('Bbb');
@@ -690,7 +692,7 @@ begin
     LStack.Clear;
     AssertNotificationsExecutedStr;
 
-    { Enqueue }
+    { Push }
     NotificationAdd(LStack, ['FPC', 'Polandball'], cnAdded);
     LStack.Push('FPC');
     LStack.Push('Polandball');
@@ -834,7 +836,7 @@ begin
     CreateObjects(O, 6);
     LStack.OnNotify := NotifyTestObj;
 
-    { Enqueue }
+    { Push }
     NotificationAdd(LStack, [O[0], O[1], O[2], O[3]], cnAdded);
     LStack.Push(O[0]);
     LStack.Push(O[1]);
@@ -857,7 +859,7 @@ begin
     LStack.Clear;
     AssertNotificationsExecutedObj;
 
-    { Enqueue }
+    { Pop }
     NotificationAdd(LStack, [O[4], O[5]], cnAdded);
     LStack.Push(O[4]);
     LStack.Push(O[5]);
@@ -873,6 +875,43 @@ end;
 procedure TTestStdCollections.Test_GenericListBox;
 begin
   TGenericListBox<Integer>.Test(Self);
+end;
+
+procedure TTestStdCollections.Test_TrimExcess;
+var
+  LList: TList<Integer>;
+  LQueue: TQueue<Integer>;
+  LStack: TStack<Integer>;
+begin
+  LList := TList<Integer>.Create;
+  LQueue := TQueue<Integer>.Create;
+  LStack := TStack<Integer>.Create;
+
+  try
+    LList.AddRange([1, 2, 3, 4, 5, 6]);
+    LList.DeleteRange(2, 3);
+    CheckNotEquals(LList.Capacity, LList.Count);
+    LList.TrimExcess;
+    AssertEquals(LList.Capacity, LList.Count);
+
+    LQueue.Enqueue(1);
+    LQueue.Enqueue(2);
+    LQueue.Dequeue;
+    CheckNotEquals(LQueue.Capacity, LQueue.Count);
+    LQueue.TrimExcess;
+    AssertEquals(LQueue.Capacity, LQueue.Count);
+
+    LStack.Push(1);
+    LStack.Push(2);
+    LStack.Pop;
+    CheckNotEquals(LStack.Capacity, LStack.Count);
+    LStack.TrimExcess;
+    AssertEquals(LStack.Capacity, LStack.Count);
+  finally
+    LStack.Free;
+    LQueue.Free;
+    LList.Free;
+  end;
 end;
 
 begin
