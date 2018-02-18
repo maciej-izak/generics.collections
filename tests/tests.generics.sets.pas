@@ -324,8 +324,13 @@ begin
     ASet.Clear;
     AssertNotificationsExecutedStr;
   finally
+    NotificationAdd(ASet, 'Polandball', cnAdded);
+    ASet.Add('Polandball');
+    AssertNotificationsExecutedStr;
     LSet.Free;
+    NotificationAdd(ASet, 'Polandball', cnRemoved);
     ASet.Free;
+    AssertNotificationsExecutedStr;
   end;
 end;
 

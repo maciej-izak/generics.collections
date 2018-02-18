@@ -16,15 +16,40 @@ type
     Executed: boolean;
   end;
 
+  TNotificationNodeRec<TValue, TInfo> = record
+    Sender: TObject;
+    Key: string;
+    Value: TValue;
+    IgnoreNodePtr: boolean;
+    Node: TCustomAVLTreeMap<string, TValue, TInfo>.PNode;
+    Action: TCollectionNotification;
+    Dispose: boolean;
+    Executed: boolean;
+  end;
+
   TTestCollections = class(TTestCase)
   private type
     TNotificationRec_String = TNotificationRec<string>;
     TNotificationRec_TObject = TNotificationRec<TObject>;
+    TNotificationNodeRec_String = TNotificationNodeRec<string, TEmptyRecord>;
+    TNotificationNodeRec_Empty = TNotificationNodeRec<TEmptyRecord, TEmptyRecord>;
+    PNode_String = TCustomAVLTreeMap<string, string, TEmptyRecord>.PNode;
+    PNode_Empty = TCustomAVLTreeMap<string, TEmptyRecord, TEmptyRecord>.PNode;
   private
+    NotificationsListNode_String: TList<TNotificationNodeRec_String>;
+    NotificationsListNode_Empty: TList<TNotificationNodeRec_Empty>;
     NotificationsListStr: TList<TNotificationRec_String>;
     NotificationsListObj: TList<TNotificationRec_TObject>;
-    NotificationsIndex: Integer;
+    NotificationsIndex, NotificationsNodesIndex: Integer;
   protected
+    procedure NotificationAdd(ASender: TObject; const AKey, AValue: string; ANode: PNode_String;
+      AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean); overload;
+    procedure NotificationAdd(ASender: TObject; const AKeys, AValues: array of string;
+      const ANodes: array of PNode_String; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean); overload;
+    procedure NotificationAdd(ASender: TObject; const AKey: string; ANode: PNode_Empty;
+      AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean); overload;
+    procedure NotificationAdd(ASender: TObject; const AKeys: array of string;
+      const ANodes: array of PNode_Empty; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean); overload;
     procedure NotificationAdd(ASender: TObject; const AItem: string;
       AAction: TCollectionNotification); overload;
     procedure NotificationAdd(ASender: TObject; const AItems: array of string;
@@ -33,10 +58,16 @@ type
       AAction: TCollectionNotification); overload;
     procedure NotificationAdd(ASender: TObject; const AItems: array of TObject;
       AAction: TCollectionNotification); overload;
+    procedure AssertNotificationsExecutedNodeStr;
+    procedure ClearNotificationsNodeStr;
+    procedure AssertNotificationsExecutedNodeEmpty;
+    procedure ClearNotificationsNodeEmpty;
     procedure AssertNotificationsExecutedStr;
     procedure ClearNotificationsStr;
     procedure AssertNotificationsExecutedObj;
     procedure ClearNotificationsObj;
+    procedure NotifyTestNodeStr(ASender: TObject; ANode: PNode_String; AAction: TCollectionNotification; ADispose: boolean);
+    procedure NotifyTestNodeEmpty(ASender: TObject; ANode: PNode_Empty; AAction: TCollectionNotification; ADispose: boolean);
     procedure NotifyTestStr(ASender: TObject; constref AItem: string; AAction: TCollectionNotification);
     procedure NotifyTestObj(ASender: TObject; constref AItem: TObject; AAction: TCollectionNotification);
 
@@ -137,6 +168,59 @@ end;
 { TTestCollections }
 
 procedure TTestCollections.NotificationAdd(ASender: TObject;
+  const AKey, AValue: string; ANode: PNode_String; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean);
+var
+  LNotification: TNotificationNodeRec_String;
+begin
+  LNotification.Sender := ASender;
+  LNotification.Key := AKey;
+  LNotification.Value := AValue;
+  LNotification.IgnoreNodePtr := AIgnoreNodePtr;
+  LNotification.Node := ANode;
+  LNotification.Action := AAction;
+  LNotification.Dispose := ADispose;
+  LNotification.Executed := False;
+  NotificationsListNode_String.Add(LNotification);
+end;
+
+procedure TTestCollections.NotificationAdd(ASender: TObject;
+  const AKeys, AValues: array of string; const ANodes: array of PNode_String; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean);
+var
+  i: Integer;
+begin
+  Assert(Length(AKeys) = Length(ANodes));
+  for i := 0 to High(AKeys) do
+    NotificationAdd(ASender, AKeys[i], AValues[i], ANodes[i], AAction, ADispose, AIgnoreNodePtr);
+end;
+
+procedure TTestCollections.NotificationAdd(ASender: TObject;
+  const AKey: string; ANode: PNode_Empty; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean);
+var
+  LNotification: TNotificationNodeRec_Empty;
+begin
+  LNotification.Sender := ASender;
+  LNotification.Key := AKey;
+  LNotification.Value := EmptyRecord;
+  LNotification.IgnoreNodePtr := AIgnoreNodePtr;
+  LNotification.Node := ANode;
+  LNotification.Action := AAction;
+  LNotification.Dispose := ADispose;
+  LNotification.Executed := False;
+  NotificationsListNode_Empty.Add(LNotification);
+end;
+
+procedure TTestCollections.NotificationAdd(ASender: TObject;
+  const AKeys: array of string; const ANodes: array of PNode_Empty; AAction: TCollectionNotification; ADispose, AIgnoreNodePtr: boolean);
+var
+  i: Integer;
+begin
+  Assert(Length(AKeys) = Length(ANodes));
+  for i := 0 to High(AKeys) do
+    NotificationAdd(ASender, AKeys[i], ANodes[i], AAction, ADispose, AIgnoreNodePtr);
+end;
+
+
+procedure TTestCollections.NotificationAdd(ASender: TObject;
   const AItem: string; AAction: TCollectionNotification);
 var
   LNotification: TNotificationRec_String;
@@ -178,6 +262,38 @@ begin
     NotificationAdd(ASender, o, AAction);
 end;
 
+procedure TTestCollections.AssertNotificationsExecutedNodeStr;
+var
+  p: ^TNotificationNodeRec_String;
+begin
+  for p in NotificationsListNode_String.Ptr^ do
+    AssertTrue(p^.Executed);
+  AssertEquals(NotificationsNodesIndex, NotificationsListNode_String.Count);
+  ClearNotificationsStr;
+end;
+
+procedure TTestCollections.ClearNotificationsNodeStr;
+begin
+  NotificationsListNode_String.Clear;
+  NotificationsNodesIndex := 0;
+end;
+
+procedure TTestCollections.AssertNotificationsExecutedNodeEmpty;
+var
+  p: ^TNotificationNodeRec_Empty;
+begin
+  for p in NotificationsListNode_Empty.Ptr^ do
+    AssertTrue(p^.Executed);
+  AssertEquals(NotificationsNodesIndex, NotificationsListNode_Empty.Count);
+  ClearNotificationsStr;
+end;
+
+procedure TTestCollections.ClearNotificationsNodeEmpty;
+begin
+  NotificationsListNode_Empty.Clear;
+  NotificationsNodesIndex := 0;
+end;
+
 procedure TTestCollections.AssertNotificationsExecutedStr;
 var
   p: ^TNotificationRec_String;
@@ -208,6 +324,43 @@ procedure TTestCollections.ClearNotificationsObj;
 begin
   NotificationsListObj.Clear;
   NotificationsIndex := 0;
+end;
+
+procedure TTestCollections.NotifyTestNodeStr(ASender: TObject; ANode: PNode_String; AAction: TCollectionNotification; ADispose: boolean);
+var
+  LNotification: TNotificationNodeRec_String;
+begin
+  AssertTrue(NotificationsNodesIndex < NotificationsListNode_String.Count);
+  LNotification := NotificationsListNode_String[NotificationsNodesIndex];
+  AssertTrue(ASender = LNotification.Sender);
+  AssertEquals(ANode.Key, LNotification.Key);
+  AssertEquals(ANode.Value, LNotification.Value);
+  if not LNotification.IgnoreNodePtr then
+    AssertSame(ANode, LNotification.Node);
+  AssertTrue(AAction = LNotification.Action);
+  AssertEquals(ADispose, LNotification.Dispose);
+  AssertFalse(LNotification.Executed);
+  LNotification.Executed := True;
+  NotificationsListNode_String[NotificationsNodesIndex] := LNotification;
+  Inc(NotificationsNodesIndex)
+end;
+
+procedure TTestCollections.NotifyTestNodeEmpty(ASender: TObject; ANode: PNode_Empty; AAction: TCollectionNotification; ADispose: boolean);
+var
+  LNotification: TNotificationNodeRec_Empty;
+begin
+  AssertTrue(NotificationsNodesIndex < NotificationsListNode_Empty.Count);
+  LNotification := NotificationsListNode_Empty[NotificationsNodesIndex];
+  AssertTrue(ASender = LNotification.Sender);
+  AssertEquals(ANode.Key, LNotification.Key);
+  if not LNotification.IgnoreNodePtr then
+    AssertSame(ANode, LNotification.Node);
+  AssertTrue(AAction = LNotification.Action);
+  AssertEquals(ADispose, LNotification.Dispose);
+  AssertFalse(LNotification.Executed);
+  LNotification.Executed := True;
+  NotificationsListNode_Empty[NotificationsNodesIndex] := LNotification;
+  Inc(NotificationsNodesIndex)
 end;
 
 procedure TTestCollections.NotifyTestStr(ASender: TObject; constref AItem: string; AAction: TCollectionNotification);
@@ -262,12 +415,16 @@ begin
   inherited;
   NotificationsListStr := TList<TNotificationRec_String>.Create;
   NotificationsListObj := TList<TNotificationRec_TObject>.Create;
+  NotificationsListNode_String := TList<TNotificationNodeRec_String>.Create;
+  NotificationsListNode_Empty := TList<TNotificationNodeRec_Empty>.Create;
 end;
 
 destructor TTestCollections.Destroy;
 begin
-  NotificationsListStr.Free;
+  NotificationsListNode_Empty.Free;
+  NotificationsListNode_String.Free;
   NotificationsListObj.Free;
+  NotificationsListStr.Free;
   inherited;
 end;
 

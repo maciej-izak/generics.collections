@@ -140,8 +140,63 @@ begin
 end;
 
 procedure TTestTrees.Test_TAVLTreeMap_Notification;
+var
+  LTree: TAVLTreeMap<string, string>;
+  LNode, LA, LC: TAVLTreeMap<string, string>.PNode;
 begin
+  LTree := TAVLTreeMap<string, string>.Create;
+  LTree.OnKeyNotify := NotifyTestStr;
+  LTree.OnValueNotify := NotifyTestStr;
+  LTree.OnNodeNotify := NotifyTestNodeStr;
+  try
+    // simple add
+    NotificationAdd(LTree, ['Aaa', 'Bbb'], cnAdded);
+    NotificationAdd(LTree, 'Aaa', 'Bbb', nil, cnAdded, false, true);
+    LA := LTree.Add('Aaa', 'Bbb');
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
 
+    // pair add
+    NotificationAdd(LTree, ['Ccc', 'Ddd'], cnAdded);
+    NotificationAdd(LTree, 'Ccc', 'Ddd', nil, cnAdded, false, true);
+    LC := LTree.Add(TAVLTreeMap<string, string>.TTreePair.Create('Ccc', 'Ddd'));
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+
+    // AddNode;
+    LNode := LTree.NewNode;
+    LNode.Key := 'Eee';
+    LNode.Value := 'Fff';
+    NotificationAdd(LTree, ['Eee', 'Fff'], cnAdded);
+    NotificationAdd(LTree, 'Eee', 'Fff', LNode, cnAdded, false, false);
+    AssertTrue(LTree.AddNode(LNode));
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+
+    // Delete
+    NotificationAdd(LTree, ['Eee', 'Fff'], cnRemoved);
+    NotificationAdd(LTree, 'Eee', 'Fff', LNode, cnRemoved, false, false);
+    LTree.Delete(LNode, false);
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+    LTree.DisposeNode(LNode);
+
+    // remove
+    NotificationAdd(LTree, ['Aaa', 'Bbb'], cnRemoved);
+    NotificationAdd(LTree, 'Aaa', 'Bbb', LA, cnRemoved, true, false);
+    LTree.Remove('Aaa');
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+
+
+    // free
+    NotificationAdd(LTree, ['Ccc', 'Ddd'], cnRemoved);
+    NotificationAdd(LTree, 'Ccc', 'Ddd', LC, cnRemoved, true, false);
+  finally
+    LTree.Free;
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+  end;
 end;
 
 procedure TTestTrees.Test_TIndexedAVLTreeMap_Notification;
