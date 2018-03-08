@@ -42,9 +42,6 @@ type
     procedure Test_IndexedAVLTree_Delete;
 
     procedure Test_TAVLTreeMap_Notification;
-    procedure Test_TIndexedAVLTreeMap_Notification;
-    procedure Test_TAVLTree_Notification;
-    procedure Test_TIndexedAVLTree_Notification;
   end;
 
 implementation
@@ -197,21 +194,6 @@ begin
     AssertNotificationsExecutedNodeStr;
     AssertNotificationsExecutedStr;
   end;
-end;
-
-procedure TTestTrees.Test_TIndexedAVLTreeMap_Notification;
-begin
-
-end;
-
-procedure TTestTrees.Test_TAVLTree_Notification;
-begin
-
-end;
-
-procedure TTestTrees.Test_TIndexedAVLTree_Notification;
-begin
-
 end;
 
 begin
