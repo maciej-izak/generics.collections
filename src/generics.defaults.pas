@@ -1,11 +1,11 @@
 {
-    This file is part of the Free Pascal run time library.
+    This file is part of the Free Pascal/NewPascal run time library.
     Copyright (c) 2014 by Maciej Izak (hnb)
-    member of the Free Sparta development team (http://freesparta.com)
+    member of the NewPascal development team (http://newpascal.org)
 
-    Copyright(c) 2004-2014 DaThoX
+    Copyright(c) 2004-2018 DaThoX
 
-    It contains the Free Pascal generics library
+    It contains the generics collections library
 
     See the file COPYING.FPC, included in this distribution,
     for details about the copyright.
@@ -21,6 +21,23 @@
 
     Thanks to mORMot (http://synopse.info) project for the best implementations
     of hashing functions like crc32c and xxHash32 :)
+
+ **********************************************************************
+
+ !!! IMPORTANT NOTE about usage of Generics.Collections and bug reports !!!
+
+ author of this library has no access to FPC trunk anymore, so every problem
+ related to this library should be reported here :
+
+ https://github.com/maciej-izak/generics.collections/issues
+
+ The library is compatible with NewPascal, FPC 3.0.4 and FPC trunk, every patch
+ (if possible) will be re-reported to FPC bugtracker with proper patch by main author.
+ Compatibility with FPC 3.0.4 and trunk will be provided as long as possible.
+
+ The NewPascal has special support for this library, more recent version (more 
+ bug fixes), more optimizations and better support from compiler side 
+ (NewPascal contains modified/extended FPC compiler version).
 
  **********************************************************************}
 
@@ -865,7 +882,25 @@ type
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
+  { TmORMotHashFactory }
+
   TmORMotHashFactory = class(THashFactory)
+  public
+    class function GetHashService: THashServiceClass; override;
+    class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
+  end;
+
+  { TxxHash32HashFactory }
+
+  TxxHash32HashFactory = class(THashFactory)
+  public
+    class function GetHashService: THashServiceClass; override;
+    class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
+  end;
+
+  { TxxHash32PascalHashFactory }
+
+  TxxHash32PascalHashFactory = class(THashFactory)
   public
     class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
@@ -2806,6 +2841,32 @@ end;
 class function TmORMotHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
 begin
   Result := mORMotHasher(AInitVal, AKey, ASize);
+end;
+
+{ TxxHash32HashFactory }
+
+class function TxxHash32HashFactory.GetHashService: THashServiceClass;
+begin
+  Result := THashService<TxxHash32HashFactory>;
+end;
+
+class function TxxHash32HashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt;
+  AInitVal: UInt32): UInt32;
+begin
+  Result := xxHash32(AInitVal, AKey, ASize);
+end;
+
+{ TxxHash32PascalHashFactory }
+
+class function TxxHash32PascalHashFactory.GetHashService: THashServiceClass;
+begin
+  Result := THashService<TxxHash32PascalHashFactory>;
+end;
+
+class function TxxHash32PascalHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt;
+  AInitVal: UInt32): UInt32;
+begin
+  Result := xxHash32Pascal(AInitVal, AKey, ASize);
 end;
 
 { TAdler32HashFactory }

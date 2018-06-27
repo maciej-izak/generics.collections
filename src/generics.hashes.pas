@@ -1,11 +1,11 @@
 {
-    This file is part of the Free Pascal run time library.
+    This file is part of the Free Pascal/NewPascal run time library.
     Copyright (c) 2014 by Maciej Izak (hnb)
-    member of the Free Sparta development team (http://freesparta.com)
+    member of the NewPascal development team (http://newpascal.org)
 
-    Copyright(c) 2004-2014 DaThoX
+    Copyright(c) 2004-2018 DaThoX
 
-    It contains the Free Pascal generics library
+    It contains the generics collections library
 
     See the file COPYING.FPC, included in this distribution,
     for details about the copyright.
@@ -22,6 +22,23 @@
     Thanks to mORMot (http://synopse.info) project for the best implementations
     of hashing functions like crc32c and xxHash32 :)
 
+ **********************************************************************
+
+ !!! IMPORTANT NOTE about usage of Generics.Collections and bug reports !!!
+
+ author of this library has no access to FPC trunk anymore, so every problem
+ related to this library should be reported here :
+
+ https://github.com/maciej-izak/generics.collections/issues
+
+ The library is compatible with NewPascal, FPC 3.0.4 and FPC trunk, every patch
+ (if possible) will be re-reported to FPC bugtracker with proper patch by main author.
+ Compatibility with FPC 3.0.4 and trunk will be provided as long as possible.
+
+ The NewPascal has special support for this library, more recent version (more 
+ bug fixes), more optimizations and better support from compiler side 
+ (NewPascal contains modified/extended FPC compiler version).
+
  **********************************************************************}
 
 unit Generics.Hashes;
@@ -32,6 +49,26 @@ unit Generics.Hashes;
 {$COPERATORS ON}
 {$OVERFLOWCHECKS OFF}
 {$RANGECHECKS OFF}
+{$ifdef CPU64}
+  {$define PUREPASCAL}
+  {$ifdef CPUX64}
+    {$define CPUINTEL}
+    {$ASMMODE INTEL}
+  {$endif CPUX64}
+{$else}
+  {$ifdef CPUX86}
+    {$ifndef FPC_PIC}
+      {$define CPUINTEL}
+      {$ASMMODE INTEL}
+    {$else}
+      { Assembler code uses references to static
+        variables with are not PIC ready }
+      {$define PUREPASCAL}
+    {$endif}
+  {$else CPUX86}
+  {$define PUREPASCAL}
+  {$endif}
+{$endif CPU64}
 
 interface
 
@@ -72,7 +109,9 @@ function SimpleChecksumHash(AKey: Pointer; ALength: SizeInt): UInt32;
 // https://code.google.com/p/hedgewars/source/browse/hedgewars/adler32.pas
 function Adler32(AKey: Pointer; ALength: SizeInt): UInt32;
 function sdbm(AKey: Pointer; ALength: SizeInt): UInt32;
-function xxHash32(crc: cardinal; P: Pointer; len: integer): cardinal;
+function xxHash32(crc: cardinal; P: Pointer; len: integer): cardinal;{$IFNDEF CPUINTEL}inline;{$ENDIF}
+// pure pascal implementation of xxHash32
+function xxHash32Pascal(crc: cardinal; P: Pointer; len: integer): cardinal;
 
 type
   THasher = function(crc: cardinal; buf: Pointer; len: cardinal): cardinal;
@@ -927,27 +966,6 @@ begin
   Result := Int32(c);
 end;
 
-{$ifdef CPU64}
-  {$define PUREPASCAL}
-  {$ifdef CPUX64}
-    {$define CPUINTEL}
-    {$ASMMODE INTEL}
-  {$endif CPUX64}
-{$else}
-  {$ifdef CPUX86}
-    {$ifndef FPC_PIC}
-      {$define CPUINTEL}
-      {$ASMMODE INTEL}
-    {$else}
-      { Assembler code uses references to static
-        variables with are not PIC ready }
-      {$define PUREPASCAL}
-    {$endif}
-  {$else CPUX86}
-  {$define PUREPASCAL}
-  {$endif}
-{$endif CPU64}
-
 {$ifdef CPUARM} // circumvent FPC issue on ARM
 function ToByte(value: cardinal): cardinal; inline;
 begin
@@ -1156,8 +1174,13 @@ asm
         {$endif}
 end;
 {$endif CPUX64}
-
 {$else not CPUINTEL}
+function xxHash32(crc: cardinal; P: Pointer; len: integer): cardinal;
+begin
+  result := xxHash32Pascal(crc, P, len);
+end;
+{$endif CPUINTEL}
+
 const
   PRIME32_1 = 2654435761;
   PRIME32_2 = 2246822519;
@@ -1171,7 +1194,7 @@ begin
   result := RolDWord(value, 13);
 end;
 
-function xxHash32(crc: cardinal; P: Pointer; len: integer): cardinal;
+function xxHash32Pascal(crc: cardinal; P: Pointer; len: integer): cardinal;
 var c1, c2, c3, c4: cardinal;
     PLimit, PEnd: PAnsiChar;
 begin
@@ -1193,7 +1216,12 @@ begin
   end else
     result := crc + PRIME32_5;
   inc(result, len);
-  while P <= PEnd - 4 do begin
+  { Use "P + 4 <= PEnd" instead of "P <= PEnd - 4" to avoid crashes in case P = nil.
+    When P = nil,
+    then "PtrUInt(PEnd - 4)" is 4294967292,
+    so the condition "P <= PEnd - 4" would be satisfied,
+    and the code would try to access PCardinal(nil)^ causing a SEGFAULT. }
+  while P + 4 <= PEnd do begin
     inc(result, PCardinal(P)^ * PRIME32_3);
     result := RolDWord(result, 17) * PRIME32_4;
     inc(P, 4);
@@ -1209,7 +1237,6 @@ begin
   result := result * PRIME32_3;
   result := result xor (result shr 16);
 end;
-{$endif CPUINTEL}
 
 {$ifdef CPUINTEL}
 
@@ -1583,7 +1610,7 @@ begin
   begin
     InitializeCrc32ctab;
     crc32c := @crc32cfast;
-    mORMotHasher := @xxHash32;
+    mORMotHasher := @{$IFDEF CPUINTEL}xxHash32{$ELSE}xxHash32Pascal{$ENDIF};
   end;
 end.
 

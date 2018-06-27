@@ -1,7 +1,9 @@
 {
-    This file is part of the Free Pascal run time library.
+    This file is part of the Free Pascal/NewPascal run time library.
     Copyright (c) 2018 by Maciej Izak (hnb),
-    member of the Free Pascal development team
+    member of the NewPascal development team (http://newpascal.org)
+
+    Copyright(c) 2004-2018 DaThoX
 
     It contains tests for the Free Pascal generics library
 
@@ -16,6 +18,23 @@
 
     Thanks to Sphere 10 Software (http://sphere10.com) for sponsoring
     many new types, tests and major refactoring of entire library
+
+ **********************************************************************
+
+ !!! IMPORTANT NOTE about usage of Generics.Collections and bug reports !!!
+
+ author of this library has no access to FPC trunk anymore, so every problem
+ related to this library should be reported here :
+
+ https://github.com/maciej-izak/generics.collections/issues
+
+ The library is compatible with NewPascal, FPC 3.0.4 and FPC trunk, every problem
+ (if possible) will be re-reported to FPC bugtracker with proper patch by main author.
+ Compatibility with FPC 3.0.4 and trunk will be provided as long as possible.
+
+ The NewPascal has special support for this library, more recent version (more 
+ bug fixes), more optimizations and better support from compiler side 
+ (NewPascal contains modified/extended FPC compiler version).
 
  **********************************************************************}
 
