@@ -1,3 +1,8 @@
+// Generic types for NewPascal.org and FPC!
+// by Maciej Izak (hnb), 2018
+// sponsored by Sphere 10 Software (http://sphere10.com)
+// bug reports : https://github.com/maciej-izak/generics.collections/issues
+
 program thashset_intersectwith;
 
 {$MODE DELPHI}
