@@ -84,6 +84,8 @@ type
     procedure Test_OpenAddressingLP_TrimExcess;
     procedure Test_CuckooD2_TrimExcess;
 
+    procedure Test_ObjectDictionary;
+
     procedure Test_TryAddOrSetOrGetValue;
     procedure Test_TryGetValueEmpty_xxHash32;
     procedure Test_TryGetValueEmpty_xxHash32Pascal;
@@ -338,6 +340,12 @@ var
 begin
   LDictionary := TCuckooD2<Integer, TEmptyRecord>.Create;
   TEST_TRIMEXCESS;
+end;
+
+procedure TTestHashMaps.Test_ObjectDictionary;
+begin
+  with TObjectOpenAddressingLP<TGUID, TGUID>.Create do Free;
+  with TObjectCuckooD2<TGUID, TGUID>.Create do Free;
 end;
 
 procedure TTestHashMaps.Test_TryAddOrSetOrGetValue;
