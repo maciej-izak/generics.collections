@@ -43,6 +43,13 @@
 
 unit Generics.Hashes;
 
+{$MODE DELPHI}{$H+}
+{$POINTERMATH ON}
+{$MACRO ON}
+{$COPERATORS ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+
 {$ifdef FPC_PIC}
   {$define DISABLE_X86_CPUINTEL}
 {$endif FPC_PIC}
@@ -53,12 +60,6 @@ unit Generics.Hashes;
   {$define DISABLE_X86_CPUINTEL}
 {$endif}
 
-{$MODE DELPHI}{$H+}
-{$POINTERMATH ON}
-{$MACRO ON}
-{$COPERATORS ON}
-{$OVERFLOWCHECKS OFF}
-{$RANGECHECKS OFF}
 {$ifdef CPU64}
   {$define PUREPASCAL}
   {$ifdef CPUX64}
