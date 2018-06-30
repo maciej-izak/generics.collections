@@ -1,7 +1,6 @@
 // Generic types for NewPascal.org and FPC!
 // Original version by keeper89.blogspot.com, 2011
 // FPC version by Maciej Izak (hnb), 2014
-// bug reports : https://github.com/maciej-izak/generics.collections/issues
 
 program TArrayProjectSingle;
 

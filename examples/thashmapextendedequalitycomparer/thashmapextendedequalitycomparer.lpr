@@ -1,6 +1,5 @@
 // Generic types for NewPascal.org and FPC!
 // by Maciej Izak (hnb), 2014
-// bug reports : https://github.com/maciej-izak/generics.collections/issues
 
 program THashMapExtendedEqualityComparer;
 

@@ -22,23 +22,6 @@
     Thanks to mORMot (http://synopse.info) project for the best implementations
     of hashing functions like crc32c and xxHash32 :)
 
- **********************************************************************
-
- !!! IMPORTANT NOTE about usage of Generics.Collections and bug reports !!!
-
- author of this library has no access to FPC trunk anymore, so every problem
- related to this library should be reported here :
-
- https://github.com/maciej-izak/generics.collections/issues
-
- The library is compatible with NewPascal, FPC 3.0.4 and FPC trunk, every patch
- (if possible) will be re-reported to FPC bugtracker with proper patch by main author.
- Compatibility with FPC 3.0.4 and trunk will be provided as long as possible.
-
- The NewPascal has special support for this library, more recent version (more 
- bug fixes), more optimizations and better support from compiler side 
- (NewPascal contains modified/extended FPC compiler version).
-
  **********************************************************************}
 
 unit Generics.Defaults;
@@ -882,9 +865,9 @@ type
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
   end;
 
-  { TmORMotHashFactory }
+  { TGenericsHashFactory }
 
-  TmORMotHashFactory = class(THashFactory)
+  TGenericsHashFactory = class(THashFactory)
   public
     class function GetHashService: THashServiceClass; override;
     class function GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32 = 0): UInt32; override;
@@ -2831,14 +2814,14 @@ begin
   Result := DelphiHashLittle(AKey, ASize, AInitVal);
 end;
 
-{ TmORMotHashFactory }
+{ TGenericsHashFactory }
 
-class function TmORMotHashFactory.GetHashService: THashServiceClass;
+class function TGenericsHashFactory.GetHashService: THashServiceClass;
 begin
-  Result := THashService<TmORMotHashFactory>;
+  Result := THashService<TGenericsHashFactory>;
 end;
 
-class function TmORMotHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
+class function TGenericsHashFactory.GetHashCode(AKey: Pointer; ASize: SizeInt; AInitVal: UInt32): UInt32;
 begin
   Result := mORMotHasher(AInitVal, AKey, ASize);
 end;
