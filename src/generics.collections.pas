@@ -928,6 +928,7 @@ type
     function Add(constref AValue: T): Boolean; override;
     function Remove(constref AValue: T): Boolean; override;
     function Extract(constref AValue: T): T; override;
+    function PeekPtr(constref AValue: T): PT;
     procedure Clear; override;
     function Contains(constref AValue: T): Boolean; override;
 
@@ -4088,6 +4089,17 @@ begin
     Result := AValue;
   end else
     Result := Default(T);
+end;
+
+function TSortedHashSet<T>.PeekPtr(constref AValue: T): PT;
+var
+  LIndex: SizeInt;
+begin
+  LIndex := FInternalDictionary.FindBucketIndex(@AValue);
+  if LIndex >= 0 then
+    result := FInternalDictionary.FItems[LIndex].Pair.Key
+  else
+    result := nil;
 end;
 
 procedure TSortedHashSet<T>.Clear;
