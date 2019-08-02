@@ -167,6 +167,30 @@ procedure TTestTrees.Test_TAVLTreeMap_Notification;
 var
   LTree: TAVLTreeMap<string, string>;
   LNode, LA, LC: TAVLTreeMap<string, string>.PNode;
+  LNodeArray: array of TAVLTreeMap<string, string>.PNode;
+
+  procedure AddNodeArray(const APairs: array of string);
+  var
+    i: integer;
+    keys, values: array of string;
+  begin
+    AssertEquals(0, Length(APairs) mod 2);
+    LTree.NewNodeArray(LNodeArray, Length(APairs) div 2);
+    SetLength(keys, Length(LNodeArray));
+    SetLength(values, Length(LNodeArray));
+    for i := 0 to High(LNodeArray) do begin
+      keys[i] := APairs[i*2];
+      values[i] := APairs[Succ(i*2)];
+      LNodeArray[i].Key := keys[i];
+      LNodeArray[i].Value := values[i];
+    end;
+    NotificationAdd(LTree, APairs, cnAdded);
+    NotificationAdd(LTree, keys, values, LNodeArray, cnAdded, false, false);
+    AssertTrue(LTree.AddNodeArray(LNodeArray));
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+  end;
+
 begin
   LTree := TAVLTreeMap<string, string>.Create;
   LTree.OnKeyNotify := NotifyTestStr;
@@ -197,6 +221,26 @@ begin
     AssertNotificationsExecutedNodeStr;
     AssertNotificationsExecutedStr;
 
+    // AddNodel array version
+    AddNodeArray(['Ggg', 'Hhh', 'Iii', 'Jjj']);
+
+    // Delete for array
+    NotificationAdd(LTree, ['Ggg', 'Hhh', 'Iii', 'Jjj'], cnRemoved);
+    NotificationAdd(LTree, ['Ggg', 'Iii'], ['Hhh', 'Jjj'], LNodeArray, cnRemoved, true, false);
+    LTree.DeleteArray(LNodeArray);
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+
+    // AddNodel array version
+    AddNodeArray(['Kkk', 'Lll', 'Mmm', 'Nnn']);
+
+    // Extract for array
+    NotificationAdd(LTree, ['Kkk', 'Lll', 'Mmm', 'Nnn'], cnExtracted);
+    NotificationAdd(LTree, ['Kkk', 'Mmm'], ['Lll', 'Nnn'], LNodeArray, cnExtracted, true, false);
+    LTree.ExtractNodeArray(LNodeArray, true);
+    AssertNotificationsExecutedNodeStr;
+    AssertNotificationsExecutedStr;
+
     // Delete
     NotificationAdd(LTree, ['Eee', 'Fff'], cnRemoved);
     NotificationAdd(LTree, 'Eee', 'Fff', LNode, cnRemoved, false, false);
@@ -213,7 +257,7 @@ begin
     AssertNotificationsExecutedStr;
 
 
-    // free
+    // free. Try only with one item, the order is not sorted
     NotificationAdd(LTree, ['Ccc', 'Ddd'], cnRemoved);
     NotificationAdd(LTree, 'Ccc', 'Ddd', LC, cnRemoved, true, false);
   finally
